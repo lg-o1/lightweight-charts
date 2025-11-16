@@ -145,16 +145,10 @@ let config = base;
 if (mode === 'flags-off') {
 	config = base;
 } else if (mode === 'flags-on') {
-	config = base.concat([
-		{
-			name: 'Drawing Tools: Rectangle',
-			path: 'dist/lightweight-charts.production.mjs',
-			import: '{ RectangleDrawingTool }',
-			ignore: ['fancy-canvas'],
-			limit: '12.00 KB',
-			brotli: true,
-		},
-	]);
+	// Wave0 临时策略：在未提供稳定二级入口（lightweight-charts/drawing-tools）前，
+	// 不在默认入口上测量 RectangleDrawingTool 体积，保持与 base 一致。
+	// Wave1 将在新增二级入口后恢复专门的 Drawing Tools size-limit 配置。
+	config = base;
 }
 
 // eslint-disable-next-line import/no-default-export

@@ -51,6 +51,8 @@ function afterInitialInteractions() {
 				try {
 					// Attempt to construct rectangle with flags-off should throw due to ensureFeatureFlagEnabled
 					const rect = new LightweightCharts.RectangleDrawingPrimitive();
+					// Mark usage to satisfy lint even if guard fails (rect exists)
+					void rect;
 					// If we reached here, guard failed
 					failedAsExpected = false;
 				} catch (e) {

@@ -133,8 +133,54 @@ function validateSpec(spec) {
 
 	if (!spec || typeof spec !== 'object') {
 		errors.push('Spec should be an object.');
-		return errors;
+	// Additional checks (Wave1 readiness)
+	// 1) featureFlag alignment with toolId
+	try {
+		if (typeof spec.featureFlag === 'string' && typeof spec.toolId === 'string') {
+			const tid = spec.toolId.trim();
+			if (!spec.featureFlag.endsWith(`.${tid}`)) {
+				errors.push(`Field "featureFlag" should end with ".${tid}" to align with toolId.`);
+			}
+		}
+	} catch {}
+
+	// 2) options type/default checks (best-effort)
+	if (Array.isArray(spec.options)) {
+		for (let i = 0; i < spec.options.length; i++) {
+			const opt = spec.options[i] ?? {};
+			if (typeof opt.name !== 'string' || opt.name.trim() === '') {
+				errors.push(`options[${i}].name must be a non-empty string.`);
+			}
+			if (typeof opt.type !== 'string' || opt.type.trim() === '') {
+				errors.push(`options[${i}].type must be a non-empty string.`);
+			}
+			if (Object.prototype.hasOwnProperty.call(opt, 'default')) {
+				const dv = opt.default;
+				const t = opt.type;
+				if (t === 'string' && typeof dv !== 'string') errors.push(`options[${i}].default should be string`);
+				if ((t === 'number' || t === 'float' || t === 'integer') && typeof dv !== 'number') errors.push(`options[${i}].default should be number`);
+				if (t === 'boolean' && typeof dv !== 'boolean') errors.push(`options[${i}].default should be boolean`);
+				if (t === 'enum') {
+					if (!Array.isArray(opt.values)) {
+						errors.push(`options[${i}].values must be an array for enum type.`);
+					} else if (!opt.values.includes(dv)) {
+						errors.push(`options[${i}].default must be one of options[${i}].values for enum type.`);
+					}
+				}
+				if (typeof dv === 'function') {
+					errors.push(`options[${i}].default must be serializable (function is not allowed).`);
+				}
+			}
+		}
 	}
+	if (spec.serializableOptions !== undefined) {
+		if (!Array.isArray(spec.serializableOptions)) {
+			errors.push('Field "serializableOptions" must be an array of option names when provided.');
+		}
+	}
+
+	return errors;
+}
 
 	// toolId
 	if (typeof spec.toolId !== 'string' || spec.toolId.trim() === '') {
@@ -577,6 +623,43 @@ async function runCheckGeneratedCommand(argv) {
 	}
 }
 
+// Lint all specs with validateSpec and report errors per file
+async function runLintSpecsCommand(argv) {
+	const specsDir = argv.specsDir ? path.resolve(projectRoot, argv.specsDir) : path.join(projectRoot, 'packages/specs');
+	if (!(await pathExists(specsDir))) {
+		console.log('drawing-tools-generator: lint-specs skipped (no specs dir).');
+		return;
+	}
+	const specFiles = (await walkDir(specsDir)).filter((f) => /\.(json|ya?ml)$/i.test(f));
+	if (specFiles.length === 0) {
+		console.log('drawing-tools-generator: lint-specs skipped (no spec files).');
+		return;
+	}
+	let issues = 0;
+	for (const specPathAbs of specFiles) {
+		try {
+			const { spec } = await loadSpec('ignored', specPathAbs);
+			const validationErrors = validateSpec(spec);
+			if (validationErrors.length > 0) {
+				issues += validationErrors.length;
+				console.error(`\n${path.relative(projectRoot, specPathAbs)}:`);
+				for (const e of validationErrors) {
+					console.error(`  - ${e}`);
+				}
+			}
+		} catch (err) {
+			issues++;
+			console.error(`\n${path.relative(projectRoot, specPathAbs)}: failed to load/parse (${err instanceof Error ? err.message : err})`);
+		}
+	}
+	if (issues > 0) {
+		console.error(`\nlint-specs: found ${issues} issue(s).`);
+		process.exitCode = 1;
+	} else {
+		console.log('lint-specs: all specs passed validation.');
+	}
+}
+
 function main() {
 	yargs(hideBin(process.argv))
 		.command(
@@ -657,6 +740,23 @@ function main() {
 				}
 			}
 		)
+		.command(
+			'lint-specs',
+			'Validate all drawing tool specs and report issues.',
+			(yargsBuilder) =>
+				yargsBuilder.option('specsDir', {
+					describe: 'Specs directory (defaults to packages/specs)',
+					type: 'string',
+				}),
+			async (argv) => {
+				try {
+					await runLintSpecsCommand(argv);
+				} catch (err) {
+					console.error(`drawing-tools-generator: ${err instanceof Error ? err.message : err}`);
+					process.exitCode = 1;
+				}
+			}
+		)
 		.demandCommand(1, 'You need to specify a command, e.g. "generate".')
 		.strict()
 		.help()
@@ -682,6 +782,7 @@ export {
 	runGenerateCommand,
 	runCheckEntriesCommand,
 	runCheckGeneratedCommand,
+	runLintSpecsCommand,
 	main,
 	GENERATED_LOCATIONS,
 	SUPPORTED_SCHEMA_VERSION,

@@ -20,8 +20,8 @@ function parseBusinessDayToUTCSeconds(t: string): number {
 function makeChartMock() {
 	const timeScale = {
 		timeToCoordinate: (t: Time) => {
-			if (typeof t === 'number') return (t as unknown as Coordinate);
-			if (typeof t === 'string') return (parseBusinessDayToUTCSeconds(t) as unknown as Coordinate);
+			if (typeof t === 'number') { return (t as unknown as Coordinate); }
+			if (typeof t === 'string') { return (parseBusinessDayToUTCSeconds(t) as unknown as Coordinate); }
 			// Fallback for BusinessDay object: map year-month-day to timestamp
 			const yyyy = (t as any).year ?? 2021;
 			const mm = (t as any).month ?? 1;

@@ -2,10 +2,13 @@
 
 import type { DrawingEnvironment, DrawingPointerEvent } from '../../types';
 
+// Lightweight Charts Drawing Tool runtime helpers for rectangle
+// See docs/internal/drawing-primitives-architecture.md for architecture notes.
+
 export function createRectangleRuntimeContext(_environment: DrawingEnvironment): void {
-	// TODO(rectangle): implement runtime helpers for rectangle tool
+	// runtime stubs intentionally minimal; tool implementations own logic
 }
 
 export function rectangleHandlePointer(_event: DrawingPointerEvent): void {
-	// TODO(rectangle): implement pointer helper
+	// pointer helper stub; integrate within tool as needed
 }

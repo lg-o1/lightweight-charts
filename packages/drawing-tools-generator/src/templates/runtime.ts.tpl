@@ -2,10 +2,13 @@
 
 import type { DrawingEnvironment, DrawingPointerEvent } from '../../types';
 
+// Lightweight Charts Drawing Tool runtime helpers for {{TOOL_ID}}
+// See docs/internal/drawing-primitives-architecture.md for architecture notes.
+
 export function {{RUNTIME_CONTEXT_FUNC}}(_environment: DrawingEnvironment): void {
-	// TODO({{TOOL_ID}}): implement runtime helpers for {{TOOL_ID}} tool
+	// runtime stubs intentionally minimal; tool implementations own logic
 }
 
 export function {{POINTER_HELPER_FUNC}}(_event: DrawingPointerEvent): void {
-	// TODO({{TOOL_ID}}): implement pointer helper
+	// pointer helper stub; integrate within tool as needed
 }

@@ -14,6 +14,7 @@ import { CanvasRenderingTarget2D } from 'fancy-canvas';
 import { BaseHandle } from '../handles/base-handle';
 import type { HandleDescriptor, HandleRenderer, HandleRendererDrawContext, HandleStyle } from '../handles/handle-types';
 import { DEFAULT_HANDLE_STYLE } from '../handles/default-handle-style';
+import { getDrawingToolController, type KeydownConsumer } from '../controller/drawing-tool-controller';
 import { rectangleSpec } from './__generated__/rectangle';
 import { rectBoundsPx, rectCornersPx } from '../runtime/geometry';
 
@@ -47,6 +48,10 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	private _start: Anchor | null = null;
 	private _end: Anchor | null = null;
 
+	// Cache pixel positions of anchors to support hit-testing under non-linear/non-indexed time transforms (e.g., BusinessDay)
+	private _startPxCache: { x: number; y: number } | null = null;
+	private _endPxCache: { x: number; y: number } | null = null;
+
 	private _options: RectOptions = {
 		fillColor: rectangleSpec.options.find(o => o.name === 'fillColor')?.default as string ?? 'rgba(200, 50, 100, 0.75)',
 		previewFillColor: rectangleSpec.options.find(o => o.name === 'previewFillColor')?.default as string ?? 'rgba(200, 50, 100, 0.25)',
@@ -65,7 +70,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	private _origStart: Anchor | null = null;
 	private _origEnd: Anchor | null = null;
 	private _dragStartPx: { x: number; y: number } | null = null;
-	private _keyListenerInstalled: boolean = false;
 
 	// Views
 	private readonly _paneFillView: IPrimitivePaneView;
@@ -99,22 +103,13 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		const state = this.stateMachine().state();
 		// First anchor
 		if (this._start === null && event.price != null && event.time != null) {
-			this._pushUndo();
-			this._start = { price: event.price, time: event.time };
-			this.stateMachine().transition('anchoring', event);
-			this.requestUpdate();
+			this._beginAnchoring(event);
 			return;
 		}
 
 		// While anchoring/preview, click should complete the rectangle even if _end already set by move
 		if (this._start !== null && (state === 'anchoring' || state === 'preview')) {
-			if (event.price != null && event.time != null) {
-				this._pushUndo();
-				this._end = { price: event.price, time: event.time };
-			}
-			this.stateMachine().transition('completed', event);
-			this.updateAllGeometry();
-			this.requestUpdate();
+			this._completeAnchoring(event);
 			return;
 		}
 
@@ -125,31 +120,28 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 				? this.handlesController().hitTest(event.point.x, event.point.y)
 				: null;
 			if (hit) {
-				// Begin handle edit: push undo and capture original anchors for ESC revert
-				this._pushUndo();
-				this._origStart = this._start ? { price: this._start.price, time: this._start.time } : null;
-				this._origEnd = this._end ? { price: this._end.price, time: this._end.time } : null;
-
-				this._dragTarget = 'handle';
-				this._activeHandleId = hit.handle.id();
-				this.stateMachine().transition('editing', event);
+				this._beginHandleEdit(hit.handle.id(), event);
 				return;
 			}
 
 			// Fallback to body hit
 			const bounds = this._boundsPx();
-			if (bounds && event.point && event.point.x != null && event.point.y != null) {
-				const { left, right, top, bottom } = bounds;
-				const inside = event.point.x >= left && event.point.x <= right && event.point.y >= top && event.point.y <= bottom;
+			if (event.point && event.point.x != null && event.point.y != null) {
+				let inside = false;
+				if (bounds) {
+					const { left, right, top, bottom } = bounds;
+					inside = event.point.x >= left && event.point.x <= right && event.point.y >= top && event.point.y <= bottom;
+				}
+				// Fallback: use cached pixel anchors when time->px transform is non-linear or does not map BusinessDay to viewport coordinates
+				if (!inside && this._startPxCache && this._endPxCache) {
+					const l = Math.min(this._startPxCache.x, this._endPxCache.x);
+					const r = Math.max(this._startPxCache.x, this._endPxCache.x);
+					const t = Math.min(this._startPxCache.y, this._endPxCache.y);
+					const b = Math.max(this._startPxCache.y, this._endPxCache.y);
+					inside = event.point.x >= l && event.point.x <= r && event.point.y >= t && event.point.y <= b;
+				}
 				if (inside) {
-					// Begin body drag: push undo and capture originals
-					this._pushUndo();
-					this._dragTarget = 'body';
-					this._activeHandleId = null;
-					this._origStart = this._start ? { price: this._start.price, time: this._start.time } : null;
-					this._origEnd = this._end ? { price: this._end.price, time: this._end.time } : null;
-					this._dragStartPx = (event.point && event.point.x != null && event.point.y != null) ? { x: event.point.x, y: event.point.y } : null;
-					this.stateMachine().transition('editing', event);
+					this._beginBodyDrag(event);
 					return;
 				}
 			}
@@ -172,6 +164,10 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		// Anchoring → preview
 		if (state === 'anchoring' && this._start !== null && event.price != null && event.time != null) {
 			this._end = { price: event.price, time: event.time };
+			// update pixel cache for fallback hit-testing
+			if (event.point && event.point.x != null && event.point.y != null) {
+				this._endPxCache = { x: event.point.x, y: event.point.y };
+			}
 			this.stateMachine().transition('preview', event);
 			this.updateAllGeometry();
 			this.requestUpdate();
@@ -188,60 +184,187 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 					: undefined);
 
 			if (handleId && event.price != null && event.time != null) {
-				switch (handleId) {
-					case 'topLeft':
-						this._start = { price: event.price, time: event.time };
-						break;
-					case 'bottomRight':
-						this._end = { price: event.price, time: event.time };
-						break;
-					case 'topRight':
-						this._start = { price: event.price, time: this._start.time };
-						this._end = { price: this._end.price, time: event.time };
-						break;
-					case 'bottomLeft':
-						this._start = { price: this._start.price, time: event.time };
-						this._end = { price: event.price, time: this._end.time };
-						break;
-				}
-				this.updateAllGeometry();
-				this.requestUpdate();
+				this._applyHandleDelta(handleId, event);
 				return;
 			}
 
 			// Body drag: move both anchors by delta using pixel-space transform to support all time types
 			if (this._dragTarget === 'body' && this._origStart && this._origEnd && this._dragStartPx && event.point && event.point.x != null && event.point.y != null) {
-				const env = this.environment();
-				const dx = event.point.x - this._dragStartPx.x;
-				const dy = event.point.y - this._dragStartPx.y;
-
-				const sTimePx = env.coordinateTransform.timeToCoordinate(this._origStart.time);
-				const eTimePx = env.coordinateTransform.timeToCoordinate(this._origEnd.time);
-				const sPricePx = env.coordinateTransform.priceToCoordinate(this._origStart.price);
-				const ePricePx = env.coordinateTransform.priceToCoordinate(this._origEnd.price);
-
-				if (sTimePx == null || eTimePx == null || sPricePx == null || ePricePx == null) { return; }
-
-				const nextStartTime = env.coordinateTransform.coordinateToTime(((sTimePx as number) + dx) as Coordinate) as Time;
-				const nextEndTime = env.coordinateTransform.coordinateToTime(((eTimePx as number) + dx) as Coordinate) as Time;
-				const nextStartPrice = env.coordinateTransform.coordinateToPrice(((sPricePx as number) + dy) as Coordinate);
-				const nextEndPrice = env.coordinateTransform.coordinateToPrice(((ePricePx as number) + dy) as Coordinate);
-
-				if (nextStartPrice == null || nextEndPrice == null || nextStartTime == null || nextEndTime == null) { return; }
-
-				const nextStart: Anchor = { price: nextStartPrice as number, time: nextStartTime };
-				const nextEnd: Anchor = { price: nextEndPrice as number, time: nextEndTime };
-
-				this._start = nextStart;
-				this._end = nextEnd;
-				this.updateAllGeometry();
-				this.requestUpdate();
+				this._applyBodyDelta(event);
 			}
 		}
 	}
 
 	protected override handlePointerCancel(): void {
-		// no-op
+		this._pointerCancel();
+	}
+
+	// Interaction primitives (skeletons) to reduce complexity and enable reuse across tools
+	// These helpers intentionally keep current behavior intact; wiring will be incremental.
+	private _pointerCancel(): void {
+		const state = this.stateMachine().state();
+		// Mirror ESC semantics for safety
+		if (state === 'anchoring' || state === 'preview') {
+			this._pushUndo();
+			this._start = null;
+			this._end = null;
+			this.handlesController().clear();
+			this.stateMachine().transition('idle');
+			this.requestUpdate();
+			return;
+		}
+		if (state === 'editing') {
+			if (this._origStart && this._origEnd) {
+				this._start = { price: this._origStart.price, time: this._origStart.time };
+				this._end = { price: this._origEnd.price, time: this._origEnd.time };
+				this.updateAllGeometry();
+			}
+			this._dragTarget = 'none';
+			this._activeHandleId = null;
+			this._origStart = null;
+			this._origEnd = null;
+			this.stateMachine().transition('completed');
+			this.requestUpdate();
+		}
+	}
+
+	// Start anchoring with first click (keeps original behavior)
+	private _beginAnchoring(event: DrawingPointerEvent): void {
+		this._pushUndo();
+		if (event.price != null && event.time != null) {
+			this._start = { price: event.price, time: event.time };
+		}
+		// record pixel position for fallback hit-testing under BusinessDay/complex time types
+		if (event.point && event.point.x != null && event.point.y != null) {
+			this._startPxCache = { x: event.point.x, y: event.point.y };
+		}
+		this.stateMachine().transition('anchoring', event);
+		this.requestUpdate();
+	}
+
+	// Complete anchoring → completed
+	private _completeAnchoring(event: DrawingPointerEvent): void {
+		if (event.price != null && event.time != null) {
+			this._pushUndo();
+			this._end = { price: event.price, time: event.time };
+		}
+		// record the final pixel position for fallback hit-testing
+		if (event.point && event.point.x != null && event.point.y != null) {
+			this._endPxCache = { x: event.point.x, y: event.point.y };
+		}
+		this.stateMachine().transition('completed', event);
+		this.updateAllGeometry();
+		this.requestUpdate();
+	}
+
+	// Enter handle editing given a handle id
+	private _beginHandleEdit(handleId: string, event: DrawingPointerEvent): void {
+		this._pushUndo();
+		this._origStart = this._start ? { price: this._start.price, time: this._start.time } : null;
+		this._origEnd = this._end ? { price: this._end.price, time: this._end.time } : null;
+		this._dragTarget = 'handle';
+		this._activeHandleId = handleId;
+		this.stateMachine().transition('editing', event);
+	}
+
+	// Apply handle delta on pointer move
+	private _applyHandleDelta(handleId: string, event: DrawingPointerEvent): void {
+		if (event.price == null || event.time == null || this._start == null || this._end == null) { return; }
+		switch (handleId) {
+			case 'topLeft':
+				this._start = { price: event.price, time: event.time };
+				break;
+			case 'bottomRight':
+				this._end = { price: event.price, time: event.time };
+				break;
+			case 'topRight':
+				this._start = { price: event.price, time: this._start.time };
+				this._end = { price: this._end.price, time: event.time };
+				break;
+			case 'bottomLeft':
+				this._start = { price: this._start.price, time: event.time };
+				this._end = { price: event.price, time: this._end.time };
+				break;
+		}
+		this.updateAllGeometry();
+		this.requestUpdate();
+	}
+
+	// Enter body drag editing
+	private _beginBodyDrag(event: DrawingPointerEvent): void {
+		this._pushUndo();
+		this._dragTarget = 'body';
+		this._activeHandleId = null;
+		this._origStart = this._start ? { price: this._start.price, time: this._start.time } : null;
+		this._origEnd = this._end ? { price: this._end.price, time: this._end.time } : null;
+		this._dragStartPx = (event.point && event.point.x != null && event.point.y != null) ? { x: event.point.x, y: event.point.y } : null;
+		this.stateMachine().transition('editing', event);
+	}
+
+	// Apply body delta using pixel transform (reduced complexity via helpers)
+	private _applyBodyDelta(event: DrawingPointerEvent): void {
+		if (!this._canApplyBodyDelta(event)) { return; }
+		const env = this.environment();
+		const dx = (event.point!.x - this._dragStartPx!.x);
+		const dy = (event.point!.y - this._dragStartPx!.y);
+
+		const coords = this._resolveAnchorCoordinates(this._origStart!, this._origEnd!, env);
+		if (!coords) { return; }
+
+		const next = this._computeNextAnchorsFromDelta(dx, dy, coords, env);
+		if (!next) { return; }
+
+		this._start = next.start;
+		this._end = next.end;
+		this.updateAllGeometry();
+		this.requestUpdate();
+	}
+
+	// Narrow pointer event for body-drag applicability to reduce complexity inside _applyBodyDelta
+	private _canApplyBodyDelta(event: DrawingPointerEvent): event is DrawingPointerEvent & { point: { x: number; y: number } } {
+		if (this._origStart == null || this._origEnd == null) { return false; }
+		if (this._dragStartPx == null) { return false; }
+		const p = event.point;
+		if (!p) { return false; }
+		if (p.x == null || p.y == null) { return false; }
+		return true;
+	}
+
+	// Resolve pixel coordinates of current anchors; returns null if any transform is unavailable
+	private _resolveAnchorCoordinates(
+		start: Anchor,
+		end: Anchor,
+		env: ReturnType<RectangleDrawingPrimitive['environment']>
+	): { sTimePx: number; eTimePx: number; sPricePx: number; ePricePx: number } | null {
+		const sTimePx = env.coordinateTransform.timeToCoordinate(start.time);
+		const eTimePx = env.coordinateTransform.timeToCoordinate(end.time);
+		const sPricePx = env.coordinateTransform.priceToCoordinate(start.price);
+		const ePricePx = env.coordinateTransform.priceToCoordinate(end.price);
+		if (sTimePx == null || eTimePx == null || sPricePx == null || ePricePx == null) { return null; }
+		return {
+			sTimePx: sTimePx as number,
+			eTimePx: eTimePx as number,
+			sPricePx: sPricePx as number,
+			ePricePx: ePricePx as number,
+		};
+	}
+
+	// Compute next anchors after applying dx/dy in pixel space and mapping back via environment transforms
+	private _computeNextAnchorsFromDelta(
+		dx: number,
+		dy: number,
+		coords: { sTimePx: number; eTimePx: number; sPricePx: number; ePricePx: number },
+		env: ReturnType<RectangleDrawingPrimitive['environment']>
+	): { start: Anchor; end: Anchor } | null {
+		const nextStartTime = env.coordinateTransform.coordinateToTime((coords.sTimePx + dx) as Coordinate) as Time;
+		const nextEndTime = env.coordinateTransform.coordinateToTime((coords.eTimePx + dx) as Coordinate) as Time;
+		const nextStartPrice = env.coordinateTransform.coordinateToPrice((coords.sPricePx + dy) as Coordinate);
+		const nextEndPrice = env.coordinateTransform.coordinateToPrice((coords.ePricePx + dy) as Coordinate);
+		if (nextStartPrice == null || nextEndPrice == null || nextStartTime == null || nextEndTime == null) { return null; }
+		return {
+			start: { price: nextStartPrice as number, time: nextStartTime },
+			end: { price: nextEndPrice as number, time: nextEndTime },
+		};
 	}
 
 	protected override collectViews(): DrawingViewBundle {
@@ -452,17 +575,8 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		this._origStart = null;
 		this._origEnd = null;
 
-		// Install keyboard listeners (Esc cancel, Delete/Backspace remove)
-		try {
-			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
-			const w: any = g?.window ?? g;
-			if (w && typeof w.addEventListener === 'function' && !this._keyListenerInstalled) {
-				w.addEventListener('keydown', this._onKeyDown as any, true);
-				this._keyListenerInstalled = true;
-			}
-		} catch {
-			// ignore in non-DOM environments
-		}
+		// Register to centralized drawing tool controller for keyboard dispatch
+		getDrawingToolController().register(this as unknown as KeydownConsumer);
 
 		this._dragStartPx = null;
 
@@ -490,17 +604,8 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	}
 
 	public override detached(): void {
-		// Remove keyboard listeners
-		try {
-			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
-			const w: any = g?.window ?? g;
-			if (w && typeof w.removeEventListener === 'function' && this._keyListenerInstalled) {
-				w.removeEventListener('keydown', this._onKeyDown as any, true);
-				this._keyListenerInstalled = false;
-			}
-		} catch {
-			// ignore in non-DOM environments
-		}
+		// Deregister from centralized drawing tool controller
+		getDrawingToolController().deregister(this as unknown as KeydownConsumer);
 
 		// Clear transient drag state
 		this._dragTarget = 'none';
@@ -510,6 +615,11 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		this._origEnd = null;
 
 		super.detached();
+	}
+
+	// Controller entrypoint: forward centralized key events to internal handler
+	public onKeyDownFromController(ev: KeyboardEvent | { key?: string; code?: string } | null | undefined): void {
+		this._onKeyDown(ev);
 	}
 
 	/* eslint-disable-next-line complexity */

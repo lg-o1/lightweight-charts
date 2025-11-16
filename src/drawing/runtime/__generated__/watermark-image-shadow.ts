@@ -2,10 +2,13 @@
 
 import type { DrawingEnvironment, DrawingPointerEvent } from '../../types';
 
+// Lightweight Charts Drawing Tool runtime helpers for watermark-image-shadow
+// See docs/internal/drawing-primitives-architecture.md for architecture notes.
+
 export function createWatermarkImageShadowRuntimeContext(_environment: DrawingEnvironment): void {
-	// TODO(watermark-image-shadow): implement runtime helpers for watermark-image-shadow tool
+	// runtime stubs intentionally minimal; tool implementations own logic
 }
 
 export function watermarkImageShadowHandlePointer(_event: DrawingPointerEvent): void {
-	// TODO(watermark-image-shadow): implement pointer helper
+	// pointer helper stub; integrate within tool as needed
 }

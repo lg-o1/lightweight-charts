@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LWC Rectangle Manual E2E</title>
+<style>
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+.wrap { display: flex; }
+#info { width: 360px; padding: 16px; border-right: 1px solid #ddd; height: 600px; box-sizing: border-box; }
+#container { margin: 20px; width: 500px; height: 500px; border: 1px solid #999; }
+.ok { color: #0a0; }
+.warn { color: #a00; }
+code { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="info">
+    <h3>Rectangle Manual Test</h3>
+    <p>Instructions:</p>
+    <ol>
+      <li>Click inside chart to place start anchor near top-left (e.g. at around 200,200 relative to chart).</li>
+      <li>Click again to place end anchor near bottom-right (e.g. ~350,350).</li>
+      <li>Click inside rectangle to enter body edit.</li>
+      <li>Move pointer to bottom-right to expand.</li>
+      <li>Click outside chart to finalize.</li>
+      <li>Click top-left handle then move pointer, then click outside to finalize.</li>
+    </ol>
+    <p>State: <span id="state" class="warn">idle</span></p>
+    <p>Anchors same as creation: <span id="changed" class="warn">N/A</span></p>
+    <p>Snapshot after create:</p>
+    <code id="snapCreate"></code>
+    <p>Current snapshot:</p>
+    <code id="snapNow"></code>
+  </div>
+  <div id="container"></div>
+</div>
+<script src="../../../dist/lightweight-charts.standalone.development.js"></script>
+<script>
+(function() {
+  const LWC = window.LightweightCharts;
+  console.log('[manual] LWC defined?', !!LWC, LWC);
+  const container = document.getElementById('container');
+  const elState = document.getElementById('state');
+  const elChanged = document.getElementById('changed');
+  const elSnapCreate = document.getElementById('snapCreate');
+  const elSnapNow = document.getElementById('snapNow');
+
+  function generateData() {
+    const res = [];
+    const time = new Date(Date.UTC(2018, 0, 1, 0, 0, 0, 0));
+    for (let i = 0; i < 500; ++i) {
+      res.push({ time: time.getTime() / 1000, value: i });
+      time.setUTCDate(time.getUTCDate() + 1);
+    }
+    return res;
+  }
+
+  // Enable flags
+  if (typeof LWC.setFeatureFlags === 'function') {
+    console.log('[manual] setFeatureFlags available, enabling flags');
+    LWC.setFeatureFlags({
+      drawingTools: true,
+      'drawingTools.rectangle': true,
+    });
+    try {
+      console.log('[manual] flags enabled', typeof LWC.allFlags === 'function' ? LWC.allFlags() : '(no allFlags)');
+    } catch (e) {
+      console.warn('[manual] allFlags not available', e);
+    }
+  } else {
+    console.warn('[manual] setFeatureFlags not found, using fallback __LWC_FEATURES');
+    window.__LWC_FEATURES = { drawingTools: true, rectangle: true };
+  }
+
+  const chart = LWC.createChart(container, { width: 500, height: 500 });
+  console.log('[manual] chart created', chart);
+  const series = chart.addSeries(LWC.LineSeries, { lineWidth: 2, color: '#2962FF' });
+  console.log('[manual] series added', series);
+  series.setData(generateData());
+  const rect = new LWC.RectangleDrawingPrimitive();
+  console.log('[manual] rect created', rect);
+  series.attachPrimitive(rect);
+  console.log('[manual] rect attached');
+  window.chart = chart;
+  window.series = series;
+  window.rect = rect;
+
+  let snapshotAfterCreate = null;
+
+  function update() {
+    try {
+      const state = (typeof rect.getState === 'function') ? rect.getState() : 'unknown';
+      elState.textContent = String(state);
+      elState.className = (state === 'completed' || state === 'editing') ? 'ok' : 'warn';
+      const snap = rect.toJSON ? rect.toJSON() : null;
+      elSnapNow.textContent = JSON.stringify(snap, null, 2);
+      if (!snapshotAfterCreate && state === 'completed' && snap && snap.anchors && snap.anchors.start && snap.anchors.end) {
+        snapshotAfterCreate = JSON.stringify(snap.anchors);
+        elSnapCreate.textContent = JSON.stringify(snap, null, 2);
+      }
+      if (snapshotAfterCreate && snap && snap.anchors) {
+        const same = snapshotAfterCreate === JSON.stringify(snap.anchors);
+        elChanged.textContent = same ? 'NO (same as creation)' : 'YES (changed)';
+        elChanged.className = same ? 'warn' : 'ok';
+      }
+    } catch (e) {
+      console.error('update error', e);
+    }
+    requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+
+  // Provide helpers in window for manual actions if needed
+  window.fit = function() { try { chart.timeScale().fitContent(); } catch(e){} };
+  window.undo = function() { try { rect.undo && rect.undo(); } catch(e){} };
+  window.redo = function() { try { rect.redo && rect.redo(); } catch(e){} };
+  window.del = function() { try { rect.deleteSelf && rect.deleteSelf(); } catch(e){} };
+})();
+</script>
+</body>
+</html>

@@ -563,13 +563,13 @@ module.exports = {
 		{
 			files: ['tests/**/*.js', 'tests/**/*.mjs', 'tests/**/*.jsx'],
 			rules: {
-				'complexity': 'off',
+				complexity: 'off',
 				'eol-last': 'off',
-				'camelcase': 'off',
+				camelcase: 'off',
 				'no-unused-vars': 'off',
 				'unicorn/no-array-push-push': 'off',
 				'no-empty': 'off',
-				'curly': 'off',
+				curly: 'off',
 				'arrow-parens': 'off',
 				'no-console': 'off',
 			},

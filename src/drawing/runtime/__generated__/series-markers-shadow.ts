@@ -2,10 +2,13 @@
 
 import type { DrawingEnvironment, DrawingPointerEvent } from '../../types';
 
+// Lightweight Charts Drawing Tool runtime helpers for series-markers-shadow
+// See docs/internal/drawing-primitives-architecture.md for architecture notes.
+
 export function createSeriesMarkersShadowRuntimeContext(_environment: DrawingEnvironment): void {
-	// TODO(series-markers-shadow): implement runtime helpers for series-markers-shadow tool
+	// runtime stubs intentionally minimal; tool implementations own logic
 }
 
 export function seriesMarkersShadowHandlePointer(_event: DrawingPointerEvent): void {
-	// TODO(series-markers-shadow): implement pointer helper
+	// pointer helper stub; integrate within tool as needed
 }

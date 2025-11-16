@@ -46,23 +46,65 @@ interface InternalWindow {
 }
 
 void describe('Interactions tests', () => {
-	const puppeteerOptions: Parameters<typeof launchPuppeteer>[0] = {};
+	const puppeteerOptions: Parameters<typeof launchPuppeteer>[0] = {
+		// force headless to improve stability in CI/Windows environments
+		headless: true,
+	};
 	if (process.env.NO_SANDBOX) {
 		puppeteerOptions.args = ['--no-sandbox', '--disable-setuid-sandbox'];
+	}
+	if (process.env.PUPPETEER_EXECUTABLE_PATH && typeof process.env.PUPPETEER_EXECUTABLE_PATH === 'string') {
+		// Allow overriding executablePath via env to improve Windows CI/dev stability
+		(puppeteerOptions as any).executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
 	}
 
 	let browser: Browser;
 
 	before(async () => {
+		console.log('[e2e] TEST_STANDALONE_PATH=%s NO_SANDBOX=%s  PUPPETEER_EXECUTABLE_PATH=%s', testStandalonePath, process.env.NO_SANDBOX, process.env.PUPPETEER_EXECUTABLE_PATH);
 		expect(
 			testStandalonePath,
 			`path to test standalone module must be passed via ${testStandalonePathEnvKey} env var`
 		).to.have.length.greaterThan(0);
 
+		// helper to log options and launch
+		const tryLaunch = async (opts: any, label: string): Promise<Browser> => {
+			try {
+				console.log('[e2e] puppeteer.launch attempt=%s opts=%o', label, {
+					headless: opts?.headless,
+					args: opts?.args,
+					executablePath: opts?.executablePath,
+					channel: opts?.channel,
+				});
+				const b = await puppeteer.launch(opts);
+				console.log('[e2e] puppeteer.launch attempt=%s success', label);
+				return b;
+			} catch (err) {
+				console.error('[e2e] puppeteer.launch attempt=%s failed: %s', label, (err instanceof Error ? err.stack ?? err.message : String(err)));
+				throw err;
+			}
+		};
+
 		// note that we cannot use launchPuppeteer here as soon it wrong typing in puppeteer
 		// see https://github.com/puppeteer/puppeteer/issues/7529
-		const browserPromise = puppeteer.launch(puppeteerOptions);
-		browser = await browserPromise;
+		try {
+			// Attempt 1: executablePath (if provided) + headless
+			browser = await tryLaunch(puppeteerOptions, 'executablePath/headless');
+		} catch (_e1) {
+			try {
+				// Attempt 2: channel=chrome
+				const optsChrome: any = { ...puppeteerOptions };
+				delete optsChrome.executablePath;
+				optsChrome.channel = 'chrome';
+				browser = await tryLaunch(optsChrome, 'channel=chrome');
+			} catch (_e2) {
+				// Attempt 3: channel=chromium
+				const optsChromium: any = { ...puppeteerOptions };
+				delete optsChromium.executablePath;
+				optsChromium.channel = 'chromium';
+				browser = await tryLaunch(optsChromium, 'channel=chromium');
+			}
+		}
 	});
 
 	let testCaseCount = 0;

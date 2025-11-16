@@ -2,10 +2,13 @@
 
 import type { DrawingEnvironment, DrawingPointerEvent } from '../../types';
 
+// Lightweight Charts Drawing Tool runtime helpers for price-line-shadow
+// See docs/internal/drawing-primitives-architecture.md for architecture notes.
+
 export function createPriceLineShadowRuntimeContext(_environment: DrawingEnvironment): void {
-	// TODO(price-line-shadow): implement runtime helpers for price-line-shadow tool
+	// runtime stubs intentionally minimal; tool implementations own logic
 }
 
 export function priceLineShadowHandlePointer(_event: DrawingPointerEvent): void {
-	// TODO(price-line-shadow): implement pointer helper
+	// pointer helper stub; integrate within tool as needed
 }

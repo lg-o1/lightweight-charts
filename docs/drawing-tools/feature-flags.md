@@ -64,3 +64,20 @@ setFeatureFlags({
 ```
 
 - 运行时守卫以 dot-key 为准，参考构造阶段的双重校验入口（见 [function ensureFeatureFlagEnabled](../../src/feature-flags.ts) 与 [class RectangleDrawingPrimitive](../../src/drawing/tools/rectangle.impl.ts)）。
+
+## 矩形 autoscale 行为说明（重要）
+
+- 当前矩形（Rectangle）工具的 autoscale 策略仅影响“垂直范围”，不会改变时间轴的水平范围（不平移/缩放 timeScale）。
+- 若需要查看完整时间跨度，请继续使用 `chart.timeScale().fitContent()` 等 API；矩形不会主动修改 timeScale 的逻辑范围。
+- 这样可避免绘图工具影响到价格序列的可视窗口，符合轻量化与可预测的渲染策略。
+
+## 快速 E2E 验证（Windows）
+
+- 构建 Standalone：
+  - `npm run build:prod`
+- 最小交互流用例（Add→Complete→Edit→Undo/Redo→Autoscale→Delete）：
+  - `npm run e2e:rectangle`
+- Flag 关闭时的运行时守卫：
+  - `npm run e2e:rectangle-flags-off`
+
+> 若需全量回归，请运行 `npm run verify`（包含 spec 校验、生成一致性检查、size-limit 双基线、E2E/内存与类型检查）。

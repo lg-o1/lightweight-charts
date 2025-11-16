@@ -142,16 +142,20 @@
     "size-limit": "size-limit",
     "size-limit:flags-off": "npm run build:prod:flags-off && cross-env LWC_SIZE_LIMIT_MODE=flags-off size-limit",
     "size-limit:flags-on": "npm run build:prod:flags-on && cross-env LWC_SIZE_LIMIT_MODE=flags-on size-limit",
-    "verify": "set PUPPETEER_SKIP_DOWNLOAD=1 && npm run clean && npm run drawing-tools:generate:check && npm run drawing-tools:check-entries && npm run drawing-tools:check-generated && npm run check-markdown-links && npm run lint && npm run check-dts-docs && npm run tsc-verify && npm run test && npm run build:prod:flags-off && npm run size-limit:flags-off && npm run build:prod:flags-on && npm run size-limit:flags-on && npm run e2e:interactions && npm run e2e:memleaks && npm run type-tests",
+    "verify": "set PUPPETEER_SKIP_DOWNLOAD=1 && npm run clean && npm run drawing-tools:generate:check && npm run drawing-tools:check-entries && npm run drawing-tools:check-generated && npm run drawing-tools:lint-specs && npm run check-markdown-links && npm run lint && npm run tsc-verify && npm run test && npm run build:prod:flags-off && npm run size-limit:flags-off && npm run build:prod:flags-on && npm run size-limit:flags-on && npm run check-dts-docs && npm run e2e:rectangle && npm run e2e:rectangle-flags-off && npm run e2e:interactions && npm run e2e:memleaks && npm run type-tests",
     "test": "esno --import ./tests/unittests/setup.units.mjs --test \"./tests/unittests/**/*.spec.ts\"",
     "type-tests": "tsc -b ./src/tsconfig.composite.json && tsc -p ./tests/type-checks/tsconfig.composite.json --noEmit",
     "e2e:coverage": "esno ./tests/e2e/coverage/runner.ts ./dist/lightweight-charts.standalone.development.js",
     "e2e:interactions": "cross-env LWC_SIZE_LIMIT_MODE=flags-on esno ./tests/e2e/interactions/runner.ts ./dist/lightweight-charts.standalone.development.js",
+    "e2e:rectangle": "cross-env LWC_SIZE_LIMIT_MODE=flags-on esno ./tests/e2e/interactions/runner-single.ts ./dist/lightweight-charts.standalone.development.js ./tests/e2e/interactions/test-cases/drawing/rectangle-flow.js",
+    "e2e:rectangle:chrome": "cross-env PUPPETEER_EXECUTABLE_PATH=\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" LWC_SIZE_LIMIT_MODE=flags-on esno ./tests/e2e/interactions/runner-single.ts ./dist/lightweight-charts.standalone.development.js ./tests/e2e/interactions/test-cases/drawing/rectangle-flow.js",
+    "e2e:rectangle-flags-off": "cross-env LWC_SIZE_LIMIT_MODE=flags-on esno ./tests/e2e/interactions/runner-single.ts ./dist/lightweight-charts.standalone.development.js ./tests/e2e/interactions/test-cases/drawing/rectangle-flags-off.js",
     "e2e:memleaks": "cross-env LWC_SIZE_LIMIT_MODE=flags-on esno ./tests/e2e/memleaks/runner.ts ./dist/lightweight-charts.standalone.development.js",
     "drawing-tools:generate": "node ./packages/drawing-tools-generator/src/cli.mjs generate",
     "drawing-tools:generate:check": "npm run drawing-tools:generate -- --check",
     "drawing-tools:check-entries": "node ./packages/drawing-tools-generator/src/cli.mjs check-entries",
     "drawing-tools:check-generated": "node ./packages/drawing-tools-generator/src/cli.mjs check-generated",
+    "drawing-tools:lint-specs": "node ./packages/drawing-tools-generator/src/cli.mjs lint-specs",
     "drawing-tools:check": "npm-run-all drawing-tools:generate:check drawing-tools:check-entries"
   }
 }

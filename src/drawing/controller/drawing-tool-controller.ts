@@ -13,19 +13,19 @@ class DrawingToolControllerImpl {
 	register(tool: KeydownConsumer): void {
 		// Move to top if already in stack (re-attach)
 		const i = this._stack.indexOf(tool);
-		if (i >= 0) this._stack.splice(i, 1);
+		if (i >= 0) { this._stack.splice(i, 1); }
 		this._stack.push(tool);
 		this._ensureInstalled();
 	}
 
 	deregister(tool: KeydownConsumer): void {
 		const i = this._stack.indexOf(tool);
-		if (i >= 0) this._stack.splice(i, 1);
+		if (i >= 0) { this._stack.splice(i, 1); }
 		this._teardownIfIdle();
 	}
 
 	private _ensureInstalled(): void {
-		if (this._installed) return;
+		if (this._installed) { return; }
 		try {
 			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
 			const w: any = g?.window ?? g;
@@ -39,7 +39,7 @@ class DrawingToolControllerImpl {
 	}
 
 	private _teardownIfIdle(): void {
-		if (this._stack.length > 0 || !this._installed) return;
+		if (this._stack.length > 0 || !this._installed) { return; }
 		try {
 			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
 			const w: any = g?.window ?? g;
@@ -56,13 +56,13 @@ class DrawingToolControllerImpl {
 		// Forward to the most recent registered tool (top of stack)
 		const last = this._stack[this._stack.length - 1];
 		if (last && typeof last.onKeyDownFromController === 'function') {
-			try { last.onKeyDownFromController(ev); } catch {}
+			try { last.onKeyDownFromController(ev); } catch (_err) { void _err; }
 		}
 	};
 }
 
-let _singleton: DrawingToolControllerImpl | null = null;
+let singleton: DrawingToolControllerImpl | null = null;
 export function getDrawingToolController(): DrawingToolControllerImpl {
-	if (_singleton == null) _singleton = new DrawingToolControllerImpl();
-	return _singleton;
+	if (singleton == null) { singleton = new DrawingToolControllerImpl(); }
+	return singleton;
 }
