@@ -5,6 +5,7 @@
 > **提交原则**：所有新绘图工具必须先定义 Tool Definition Schema（TDS），再运行 `npm run drawing-tools:generate` 生成代码，并通过 `npm run drawing-tools:generate --check` 校验，禁止直接手写或修改 `src/drawing/**/__generated__`。
 
 ## 1. 总体策略
+
 - **渐进式交付**：以 Wave0-Wave5 递进方式实施，确保每一波次都有可验证成果与可回滚策略。
 - **TDS 优先**：任何绘图工具变更均以 TDS 为单一事实来源，由 generator 生成工具代码、测试模板、文档片段。手写代码仅限抽象层与配套逻辑。
 - **双轨生成体系**：在生成工具代码的同时，同步生成/更新运行时几何、handle 控制、测试、文档，确保一致性。
@@ -13,6 +14,7 @@
 - **插件共存**：评估 `plugin-examples` 中的现有工具，决定复用、迁移或保留插件形态，并提供兼容指引。
 
 ## 2. 阶段概览
+
 | Wave | 主题 | 主要交付 | 验收重点 |
 | --- | --- | --- | --- |
 | Wave0 | 基座 + 矩形工具 | TDS/生成链、DrawingPrimitiveBase、Rectangle | Feature Flag、状态机、命中测试、文档/示例 |
@@ -23,6 +25,7 @@
 | Wave5 | 生态 & 稳定化 | 绘图集合、协同接口、对外 API 稳定 | 版本迁移、文档、插件迁移工具 |
 
 ## 3. TDS 管理与生成体系
+
 - **Schema 位置**：所有工具在 `packages/specs/<tool>.yaml|json` 定义 TDS，包括 anchors、handles、states、views、autoscale、serialization、options、performance 配置。
 - **生成流程**：运行 `npm run drawing-tools:generate` 生成 `src/drawing/**/__generated__`、runtime geometry、handle 控制器、测试模板、文档片段。
 - **CI 守护**：
@@ -33,7 +36,9 @@
 - **文档**：`docs/drawing-tools/gap-analysis.md`、各 Wave 设计文档需记录 TDS 状态与变更。
 
 ## 4. 各 Wave 关键目标
+
 ### Wave0（基座 + 矩形）
+
 - 建立 TDS → 生成链 → 基座抽象。
 - 实现 Rectangle（矩形）工具，涵盖 add/preview/edit/delete/undo/redo/autoscale/序列化。
 - Feature Flag：`drawingTools`、`drawingTools.rectangle`。
@@ -41,28 +46,34 @@
 - 文档：示例、官网教程、gap 分析、插件迁移指南。
 
 ### Wave1（基础形状 & 注释）
+
 - Phase 1A：扩展 Handle、StateMachine、DrawingToolController；更新模板。
 - Phase 1B：TDS 驱动椭圆、三角、多段线/路径工具；各工具补齐测试与文档。
 - Phase 1C：文本注释（及图标/emoji 扩展）、序列化 Beta、插件对照测试。
 
 ### Wave2（测量 & 预测）
+
 - 基于 TDS 实现 Long/Short Position、Price/Date Range、Forecast。
 - 引入数据标签、未来时间绘制、复杂 autoscale。
 - 序列化升级；性能与内存测试强化。
 
 ### Wave3（高级趋势/比例）
+
 - Fibonacci 系列、Gann Fan、Pitchfork 等工具 TDS；模板化配置与多层渲染。
 - 加强吸附、对齐、模板导入导出。
 
 ### Wave4（UI & 主题）
+
 - Icons/Emoji、背景填充、主题系统整合。
 - 绘图层级隔离、批量渲染性能优化。
 
 ### Wave5（生态 & 稳定化）
+
 - 绘图集合管理、协同接口、权限控制。
 - 对外 API GA、版本迁移工具、插件适配器。
 
 ## 5. 里程碑与验收
+
 | 里程碑 | 条件 | 产出 |
 | --- | --- | --- |
 | M0 | Wave0 验收 | 生成链上线、Rectangle 工具 Beta、文档/示例/测试齐备 |
@@ -75,6 +86,7 @@
 | M7 | Wave5 完成 | 生态 API GA + 文档收官 |
 
 ## 6. 测试与质量策略
+
 - 单测覆盖几何算法、状态机、handles、序列化。
 - E2E 验证交互流程（Add/Preview/Edit/Delete/Undo/Redo/Autoscale/序列化）。
 - 性能基线：FPS、内存、批量绘图压力测试；纳入 CI。
@@ -82,11 +94,13 @@
 - 回归防护：禁止手写 `__generated__`；入口脚本校验；PR checklist 强制 reviewer 验证。
 
 ## 7. 文档与示例策略
+
 - 每个工具交付时同步更新：`docs/examples/drawing/<tool>`、官网教程、API 文档、Known Issues。
 - gap-analysis 标记 TradingView 对照进度。
 - 发布操作演示（可选）、CHANGELOG、UPGRADE-GUIDE。
 
 ## 8. 风险与缓解
+
 - **生成链不稳定**：完善 TDS 模板、CI 检查；在 Wave0 完成 CLI 及守护脚本。
 - **性能退化**：每波设定性能基准；若回归超阈值，阻止合并。
 - **功能扩散**：未完成前的 Wave 禁止跨波次需求插队；必要时通过 RFC 评估。
@@ -106,15 +120,15 @@
   - 预防/修复：
     - “契约锁定”：固定导出集合 isEnabled()、requireEnabled()、setFeatureFlags()、ensureFeatureFlagEnabled()、resetFeatureFlags()、allFlags()，新增导出时必须附带单测；
     - CI 强制 tsc-verify 与 flags-off/flags-on 构造用例（参考 [feature-flags.spec.ts](lightweight-charts/tests/unittests/drawing/feature-flags.spec.ts:14)）；
-    - 启用“受限导入”检查，禁止生产代码从 __generated__ 直接导入（由 CLI 守护，见 [cli.mjs](lightweight-charts/packages/drawing-tools-generator/src/cli.mjs:500)）。
+    - 启用“受限导入”检查，禁止生产代码从 `__generated__` 直接导入（由 CLI 守护，见 [cli.mjs](lightweight-charts/packages/drawing-tools-generator/src/cli.mjs:500)）。
 
 - 问题 B：Rectangle “生成物 vs 实现”职责误读
   - 症状：
     - 误以为生成文件需包含交互/句柄/序列化等全部逻辑，导致评估为“缺失能力”。
   - 成因：
-    - 未明确“__generated__ 仅含元数据/空钩子”的责任边界，真实行为在实现层。
+    - 未明确“`__generated__` 仅含元数据/空钩子”的责任边界，真实行为在实现层。
   - 预防/修复：
-    - 在设计与文档中强调分层：生成产物 [__generated__/rectangle.ts](lightweight-charts/src/drawing/tools/__generated__/rectangle.ts:1) 仅承载 spec/守护；行为落在实现层 [rectangle.impl.ts](lightweight-charts/src/drawing/tools/rectangle.impl.ts:30)；稳定入口 [rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts:1) 只转发实现；
+    - 在设计与文档中强调分层：生成产物 [`__generated__/rectangle.ts`](lightweight-charts/src/drawing/tools/__generated__/rectangle.ts:1) 仅承载 spec/守护；行为落在实现层 [rectangle.impl.ts](lightweight-charts/src/drawing/tools/rectangle.impl.ts:30)；稳定入口 [rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts:1) 只转发实现；
     - CLI 增加“实现存在性”检查与最小行为用例模板，防止只有生成骨架而无实现的情况。
 
 - 问题 C：DrawingPrimitiveBase 体量过大、attach/detach/requestUpdate 复杂
@@ -150,8 +164,8 @@
 ### Wave1 防回归最佳实践（强制执行）
 
 - 生成链与入口
-  - 只从稳定入口导出（例如 [rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts:1)），生产代码禁止 import __generated__（由 [cli.mjs.restricted-imports()](lightweight-charts/packages/drawing-tools-generator/src/cli.mjs:506) 守护）；
-  - PR 必须通过 drawing-tools:generate --check，禁止手改 __generated__。
+  - 只从稳定入口导出（例如 [rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts:1)），生产代码禁止 import `__generated__`（由 [cli.mjs.restricted-imports()](lightweight-charts/packages/drawing-tools-generator/src/cli.mjs:506) 守护）；
+  - PR 必须通过 drawing-tools:generate --check，禁止手改 `__generated__`。
 
 - Feature Flags 守护
   - 保持 [feature-flags.ts](lightweight-charts/src/feature-flags.ts:1) 导出契约稳定；新增 Flag 必须有“关闭报错/开启通过”的构造用例；
@@ -165,9 +179,9 @@
   - 性能与内存基线（200+ 实例/长拖拽），以及 demo 驱动的 E2E。
 
 - 文档/示例门槛
-  - 发布 docs/examples/drawing/<tool> 与官网教程页；插件迁移指南明确差异与迁移建议；
+  - 发布 `docs/examples/drawing/<tool>` 与官网教程页；插件迁移指南明确差异与迁移建议；
   - 在 [docs/drawing-tools/feature-flags.md](lightweight-charts/docs/drawing-tools/feature-flags.md:25) 更新“二级入口/Flag 使用”说明。
 
 ---
- 
+
 > Roadmap 会随着每波验收结果更新。若需调整优先级或新增功能，必须提交设计评审并同步更新本文档与相关 TDS。

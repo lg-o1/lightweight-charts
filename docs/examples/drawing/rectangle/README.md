@@ -1,14 +1,17 @@
 # 矩形（Rectangle）绘图工具示例与使用说明
 
 目标
+
 - 演示在 Standalone（flags-on 构建）环境下创建与交互矩形绘图工具的最小用法。
 - 覆盖：启用 Feature Flags、创建图表/序列、附加 `RectangleDrawingPrimitive`、交互要点（添加/编辑/删除/撤销重做/序列化）。
 
 前置条件
+
 - 使用 `dist/lightweight-charts.standalone.development.js` 或生产版 Standalone 构建。
 - 运行前请确保 Feature Flags 按需开启（示例中将通过运行时API启用）。
 
 示例（最小 HTML 页面）
+
 ```html
 <!doctype html>
 <html lang="zh-CN">
@@ -93,10 +96,12 @@
 ```
 
 使用提示
+
 - 默认入口不应静态导出绘图工具；按需暴露策略建议通过二级入口或 Standalone 构建提供。
 - 运行时 Feature Flags 用于“最后防线”，确保禁用时抛出明确错误；构建期通过零引用 + tree-shaking 实现“未开不打包”。
 
 故障排查
+
 - 若 `RectangleDrawingPrimitive` 构造时报错，请确认：
   - 是否已启用 `drawingTools` 与 `drawingTools.rectangle`。
   - 所使用的构建是否为 Standalone（flags-on 模式）。

@@ -57,7 +57,7 @@
   - 性能：≥200 形状实例下连续 5s 拖拽稳定（无掉帧预警、无控制台错误）。
   - 内存：memlab attach/detach 循环、销毁图表后可回收，泄漏基线通过。
   - 文档：新增矩形示例与教程，作为 Wave1 工具文档模板：
-    - [docs/examples/drawing/rectangle/README.md](lightweight-charts/docs/examples/drawing/rectangle/README.md)
+    - [docs/examples/drawing/rectangle/README.md](../examples/drawing/rectangle/README.md)
 
 - DoD（Definition of Done）
   - 完成本节所有项并在 CI 中以 scripts.verify 严格通过，方可切换到 Wave1 Phase 1A。

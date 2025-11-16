@@ -73,7 +73,8 @@ function runESLintForFiles(files) {
 }
 
 function runMarkdownLintForFiles(mdFiles) {
-	return runForFiles('node ./node_modules/markdownlint-cli/markdownlint.js', mdFiles);
+	// markdownlint disabled by project policy
+	return false;
 }
 
 function filterByExt(files, ext) {

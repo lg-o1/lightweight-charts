@@ -13,6 +13,7 @@ import type { Coordinate } from '../../model/coordinate';
 import { CanvasRenderingTarget2D } from 'fancy-canvas';
 import { BaseHandle } from '../handles/base-handle';
 import type { HandleDescriptor, HandleRenderer, HandleRendererDrawContext, HandleStyle } from '../handles/handle-types';
+import { DEFAULT_HANDLE_STYLE } from '../handles/default-handle-style';
 import { rectangleSpec } from './__generated__/rectangle';
 import { rectBoundsPx, rectCornersPx } from '../runtime/geometry';
 
@@ -304,15 +305,7 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 			h.clear();
 			return;
 		}
-		const size = 8;
-		const style: HandleStyle = {
-			size,
-			fill: '#ffffff',
-			stroke: '#333333',
-			lineWidth: 1,
-			hoverFill: '#ffeeaa',
-			activeFill: '#ffcc66',
-		};
+		const style: HandleStyle = DEFAULT_HANDLE_STYLE;
 		const renderer = new SquareHandleRenderer();
 		const upsert = (id: string, pos: { x: number; y: number }, cursor: string) => {
 			const existing = h.get(id);

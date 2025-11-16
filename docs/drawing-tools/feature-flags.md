@@ -6,13 +6,13 @@
 - 当前选择“并行推进”：不改变现有公共导出，仅落地导出侧零引用策略与 size-limit 双基线脚本骨架。
 
 相关文件
-- 公共入口：[src/index.ts](lightweight-charts/src/index.ts)
-- 独立构建入口（浏览器 UMD/Standalone）：[src/standalone.ts](lightweight-charts/src/standalone.ts)
-- Feature Flags 定义与工具：[src/feature-flags.ts](lightweight-charts/src/feature-flags.ts)
-- Drawing Tool 稳定包装入口（手写）：[src/drawing/tools/rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts)
-- Drawing Tool 生成产物（只允许写入此处）：[src/drawing/tools/__generated__/rectangle.ts](lightweight-charts/src/drawing/tools/__generated__/rectangle.ts)
-- 体积基线配置： [.size-limit.js](lightweight-charts/.size-limit.js)
-- 脚本配置： [package.json](lightweight-charts/package.json)
+- 公共入口：[src/index.ts](../../src/index.ts)
+- 独立构建入口（浏览器 UMD/Standalone）：[src/standalone.ts](../../src/standalone.ts)
+- Feature Flags 定义与工具：[src/feature-flags.ts](../../src/feature-flags.ts)
+- Drawing Tool 稳定包装入口（手写）：[src/drawing/tools/rectangle.ts](../../src/drawing/tools/rectangle.ts)
+- Drawing Tool 生成产物（只允许写入此处）：[src/drawing/tools/__generated__/rectangle.ts](../../src/drawing/tools/__generated__/rectangle.ts)
+- 体积基线配置： [.size-limit.js](../../.size-limit.js)
+- 脚本配置： [package.json](../../package.json)
 
 设计原则
 - 公共入口不静态引用任何 Drawing Tools。保持零引用意味着在 Flag 关闭时实现“零导出/零打包”。
@@ -21,19 +21,19 @@
 - 运行时 Flag 仅作为“最后防线”（阻止误用），真正的“未开不打包”依赖构建期零引用与 tree-shaking。
 
 导出接线方案（草案）
-1) 保持现状：不在 [src/index.ts](lightweight-charts/src/index.ts) 增加任何 Drawing Tools 的导出。
-2) 生成器产物只经由稳定包装入口暴露：例如 [src/drawing/tools/rectangle.ts](lightweight-charts/src/drawing/tools/rectangle.ts)，其内部再转发到 [src/drawing/tools/__generated__/rectangle.ts](lightweight-charts/src/drawing/tools/__generated__/rectangle.ts)。
+1) 保持现状：不在 [src/index.ts](../../src/index.ts) 增加任何 Drawing Tools 的导出。
+2) 生成器产物只经由稳定包装入口暴露：例如 [src/drawing/tools/rectangle.ts](../../src/drawing/tools/rectangle.ts)，其内部再转发到 [src/drawing/tools/__generated__/rectangle.ts](../../src/drawing/tools/__generated__/rectangle.ts)。
 3) 未来新增“按需入口”（计划中，暂不启用）：提供一个二级入口路径（例如 lightweight-charts/drawing-tools），仅在需要时由应用显式导入，从而维持默认包的零引用。
 4) 二级入口内部将基于 Feature Flag 决定暴露哪些包装入口，但不会在默认入口产生任何静态 import。
 
 构建与打包策略
-- 保持 [src/index.ts](lightweight-charts/src/index.ts) 与 [src/standalone.ts](lightweight-charts/src/standalone.ts) 不引用 Drawing Tools。
+- 保持 [src/index.ts](../../src/index.ts) 与 [src/standalone.ts](../../src/standalone.ts) 不引用 Drawing Tools。
 - 生成产物与包装入口的存在不影响默认构建，只要没有从公共入口导入，它们不会进入产物。
 - 运行时对 Flag 的检查已由生成产物负责（构造/attach 时进行断言），用于防止误用；但这不会引入到默认包中，因为默认包没有引用这些模块。
 
 size-limit 双基线（脚本骨架）
-- 在 [.size-limit.js](lightweight-charts/.size-limit.js) 中加入模式开关，支持通过环境变量区分 flags-off 与 flags-on 模式。
-- 在 [package.json](lightweight-charts/package.json) 中新增脚本：size-limit:flags-off 与 size-limit:flags-on。
+- 在 [.size-limit.js](../../.size-limit.js) 中加入模式开关，支持通过环境变量区分 flags-off 与 flags-on 模式。
+- 在 [package.json](../../package.json) 中新增脚本：size-limit:flags-off 与 size-limit:flags-on。
 - 目前两个模式均复用基础场景；待公共按需入口接线完成后，将在 flags-on 模式追加对二级入口的体积校验项。
 
 建议的验证路径
@@ -58,9 +58,9 @@ size-limit 双基线（脚本骨架）
 ```js
 import { setFeatureFlags } from 'lightweight-charts/feature-flags';
 setFeatureFlags({
-  drawingTools: true,
-  'drawingTools.rectangle': true,
+    drawingTools: true,
+    'drawingTools.rectangle': true,
 });
 ```
 
-- 运行时守卫以 dot-key 为准，参考构造阶段的双重校验入口（见 [function ensureFeatureFlagEnabled](lightweight-charts/src/feature-flags.ts:230) 与 [class RectangleDrawingPrimitive](lightweight-charts/src/drawing/tools/rectangle.impl.ts:76)）。
+- 运行时守卫以 dot-key 为准，参考构造阶段的双重校验入口（见 [function ensureFeatureFlagEnabled](../../src/feature-flags.ts) 与 [class RectangleDrawingPrimitive](../../src/drawing/tools/rectangle.impl.ts)）。
