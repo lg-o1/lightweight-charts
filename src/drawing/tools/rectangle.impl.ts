@@ -8,7 +8,8 @@ import { ensureFeatureFlagEnabled } from '../../feature-flags';
 import type { IPrimitivePaneRenderer, IPrimitivePaneView, PrimitivePaneViewZOrder, DrawingUtils } from '../../model/ipane-primitive';
 import type { ISeriesPrimitiveAxisView } from '../../model/iseries-primitive';
 import type { AutoscaleInfo } from '../../model/series-options';
-import type { Time, UTCTimestamp } from '../../model/horz-scale-behavior-time/types';
+import type { Time } from '../../model/horz-scale-behavior-time/types';
+import type { Coordinate } from '../../model/coordinate';
 import { CanvasRenderingTarget2D } from 'fancy-canvas';
 import { BaseHandle } from '../handles/base-handle';
 import type { HandleDescriptor, HandleRenderer, HandleRendererDrawContext, HandleStyle } from '../handles/handle-types';
@@ -25,11 +26,20 @@ interface RectOptions {
 	labelColor: string;
 	labelTextColor: string;
 	showLabels: boolean;
+	priceLabelFormatter?: (price: number) => string;
+	timeLabelFormatter?: (time: Time) => string;
 }
+type RectOptionsSnapshot = {
+	fillColor: string;
+	previewFillColor: string;
+	labelColor: string;
+	labelTextColor: string;
+	showLabels: boolean;
+};
 interface RectangleSnapshotV1 {
 	version: 1;
 	anchors: { start: Anchor | null; end: Anchor | null };
-	options: RectOptions;
+	options: RectOptionsSnapshot;
 }
 
 export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
@@ -42,6 +52,8 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		labelColor: rectangleSpec.options.find(o => o.name === 'labelColor')?.default as string ?? 'rgba(200, 50, 100, 1)',
 		labelTextColor: rectangleSpec.options.find(o => o.name === 'labelTextColor')?.default as string ?? '#ffffff',
 		showLabels: (rectangleSpec.options.find(o => o.name === 'showLabels')?.default as boolean) ?? true,
+		priceLabelFormatter: (p: number) => String(p),
+		timeLabelFormatter: (t: Time) => String(t),
 	};
 	private _undoStack: RectangleSnapshotV1[] = [];
 	private _redoStack: RectangleSnapshotV1[] = [];
@@ -49,9 +61,10 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	// Drag/editing state
 	private _dragTarget: 'none' | 'body' | 'handle' = 'none';
 	private _activeHandleId: string | null = null;
-	private _dragStartRef: Anchor | null = null;
 	private _origStart: Anchor | null = null;
 	private _origEnd: Anchor | null = null;
+	private _dragStartPx: { x: number; y: number } | null = null;
+	private _keyListenerInstalled: boolean = false;
 
 	// Views
 	private readonly _paneFillView: IPrimitivePaneView;
@@ -118,7 +131,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 
 				this._dragTarget = 'handle';
 				this._activeHandleId = hit.handle.id();
-				this._dragStartRef = (event.price != null && event.time != null) ? { price: event.price, time: event.time } : null;
 				this.stateMachine().transition('editing', event);
 				return;
 			}
@@ -135,7 +147,7 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 					this._activeHandleId = null;
 					this._origStart = this._start ? { price: this._start.price, time: this._start.time } : null;
 					this._origEnd = this._end ? { price: this._end.price, time: this._end.time } : null;
-					this._dragStartRef = (event.price != null && event.time != null) ? { price: event.price, time: event.time } : null;
+					this._dragStartPx = (event.point && event.point.x != null && event.point.y != null) ? { x: event.point.x, y: event.point.y } : null;
 					this.stateMachine().transition('editing', event);
 					return;
 				}
@@ -145,7 +157,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 			if (state === 'editing') {
 				this._dragTarget = 'none';
 				this._activeHandleId = null;
-				this._dragStartRef = null;
 				this._origStart = null;
 				this._origEnd = null;
 				this.stateMachine().transition('completed', event);
@@ -171,7 +182,9 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 			// Handle drag (prefer explicit selection from click; fallback to hit under cursor)
 			const handleId = this._dragTarget === 'handle'
 				? this._activeHandleId
-				: (this.handlesController().hitTest(event.point.x, event.point.y)?.handle.id());
+				: (event.point && event.point.x != null && event.point.y != null
+					? this.handlesController().hitTest(event.point.x, event.point.y)?.handle.id()
+					: undefined);
 
 			if (handleId && event.price != null && event.time != null) {
 				switch (handleId) {
@@ -195,25 +208,29 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 				return;
 			}
 
-			// Body drag: move both anchors by delta (numeric time only)
-			if (this._dragTarget === 'body' && this._origStart && this._origEnd && this._dragStartRef && event.price != null && event.time != null) {
-				const dt = (typeof event.time === 'number' && typeof this._dragStartRef.time === 'number')
-					? (event.time as number) - (this._dragStartRef.time as number)
-					: 0;
-				const dp = event.price - this._dragStartRef.price;
+			// Body drag: move both anchors by delta using pixel-space transform to support all time types
+			if (this._dragTarget === 'body' && this._origStart && this._origEnd && this._dragStartPx && event.point && event.point.x != null && event.point.y != null) {
+				const env = this.environment();
+				const dx = event.point.x - this._dragStartPx.x;
+				const dy = event.point.y - this._dragStartPx.y;
 
-				const nextStart: Anchor = {
-					price: this._origStart.price + dp,
-					time: (typeof this._origStart.time === 'number')
-						? (((this._origStart.time as number) + dt) as UTCTimestamp)
-						: (this._origStart.time as Time),
-				};
-				const nextEnd: Anchor = {
-					price: this._origEnd.price + dp,
-					time: (typeof this._origEnd.time === 'number')
-						? (((this._origEnd.time as number) + dt) as UTCTimestamp)
-						: (this._origEnd.time as Time),
-				};
+				const sTimePx = env.coordinateTransform.timeToCoordinate(this._origStart.time);
+				const eTimePx = env.coordinateTransform.timeToCoordinate(this._origEnd.time);
+				const sPricePx = env.coordinateTransform.priceToCoordinate(this._origStart.price);
+				const ePricePx = env.coordinateTransform.priceToCoordinate(this._origEnd.price);
+
+				if (sTimePx == null || eTimePx == null || sPricePx == null || ePricePx == null) { return; }
+
+				const nextStartTime = env.coordinateTransform.coordinateToTime(((sTimePx as number) + dx) as Coordinate) as Time;
+				const nextEndTime = env.coordinateTransform.coordinateToTime(((eTimePx as number) + dx) as Coordinate) as Time;
+				const nextStartPrice = env.coordinateTransform.coordinateToPrice(((sPricePx as number) + dy) as Coordinate);
+				const nextEndPrice = env.coordinateTransform.coordinateToPrice(((ePricePx as number) + dy) as Coordinate);
+
+				if (nextStartPrice == null || nextEndPrice == null || nextStartTime == null || nextEndTime == null) { return; }
+
+				const nextStart: Anchor = { price: nextStartPrice as number, time: nextStartTime };
+				const nextEnd: Anchor = { price: nextEndPrice as number, time: nextEndTime };
+
 				this._start = nextStart;
 				this._end = nextEnd;
 				this.updateAllGeometry();
@@ -251,6 +268,12 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	}
 
 	protected override performHitTest(event: DrawingPointerEvent): DrawingHoverResult | null {
+		// Guard against missing pointer coordinates (e.g., keyboard-driven events)
+		if (!event.point || event.point.x == null || event.point.y == null) {
+			this.handlesController().setHovered(null);
+			return null;
+		}
+
 		const hit = this.handlesController().hitTest(event.point.x, event.point.y);
 		if (hit) {
 			this.handlesController().setHovered(hit.handle.id());
@@ -346,7 +369,13 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		return {
 			version: 1,
 			anchors: { start: this._start, end: this._end },
-			options: { ...this._options },
+			options: {
+				fillColor: this._options.fillColor,
+				previewFillColor: this._options.previewFillColor,
+				labelColor: this._options.labelColor,
+				labelTextColor: this._options.labelTextColor,
+				showLabels: this._options.showLabels,
+			},
 		};
 	}
 
@@ -367,6 +396,9 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	private _pushUndo(): void {
 		this._undoStack.push(this._snapshot());
 		this._redoStack.length = 0;
+		if (this._undoStack.length > 64) {
+			this._undoStack.shift();
+		}
 	}
 
 	public toJSON(): RectangleSnapshotV1 { return this._snapshot(); }
@@ -411,7 +443,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		this._end = null;
 		this._dragTarget = 'none';
 		this._activeHandleId = null;
-		this._dragStartRef = null;
 		this._origStart = null;
 		this._origEnd = null;
 		this.handlesController().clear();
@@ -425,7 +456,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		// Reset transient drag state
 		this._dragTarget = 'none';
 		this._activeHandleId = null;
-		this._dragStartRef = null;
 		this._origStart = null;
 		this._origEnd = null;
 
@@ -433,12 +463,15 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		try {
 			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
 			const w: any = g?.window ?? g;
-			if (w && typeof w.addEventListener === 'function') {
+			if (w && typeof w.addEventListener === 'function' && !this._keyListenerInstalled) {
 				w.addEventListener('keydown', this._onKeyDown as any, true);
+				this._keyListenerInstalled = true;
 			}
 		} catch {
 			// ignore in non-DOM environments
 		}
+
+		this._dragStartPx = null;
 
 		if (this._start && this._end) {
 			this.stateMachine().transition('completed');
@@ -453,7 +486,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 			// reset transient drag state
 			this._dragTarget = 'none';
 			this._activeHandleId = null;
-			this._dragStartRef = null;
 			this._origStart = null;
 			this._origEnd = null;
 
@@ -469,8 +501,9 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		try {
 			const g: any = (typeof globalThis !== 'undefined') ? (globalThis as any) : undefined;
 			const w: any = g?.window ?? g;
-			if (w && typeof w.removeEventListener === 'function') {
+			if (w && typeof w.removeEventListener === 'function' && this._keyListenerInstalled) {
 				w.removeEventListener('keydown', this._onKeyDown as any, true);
+				this._keyListenerInstalled = false;
 			}
 		} catch {
 			// ignore in non-DOM environments
@@ -479,7 +512,7 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 		// Clear transient drag state
 		this._dragTarget = 'none';
 		this._activeHandleId = null;
-		this._dragStartRef = null;
+		this._dragStartPx = null;
 		this._origStart = null;
 		this._origEnd = null;
 
@@ -515,7 +548,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 				}
 				this._dragTarget = 'none';
 				this._activeHandleId = null;
-				this._dragStartRef = null;
 				this._origStart = null;
 				this._origEnd = null;
 				this.stateMachine().transition('completed');
@@ -617,7 +649,8 @@ class RectAxisLabelViewPrice implements ISeriesPrimitiveAxisView {
 	public fixedCoordinate?(): number | undefined { return undefined; }
 	public text(): string {
 		const a = this._anchor === 'start' ? this._primitive.getStartAnchor() : this._primitive.getEndAnchor();
-		return a ? String(a.price) : '';
+		const fmt = this._primitive.getOptions().priceLabelFormatter;
+		return a ? (fmt ? fmt(a.price) : String(a.price)) : '';
 	}
 	public textColor(): string { return this._primitive.getOptions().labelTextColor; }
 	public backColor(): string { return this._primitive.getOptions().labelColor; }
@@ -643,7 +676,8 @@ class RectAxisLabelViewTime implements ISeriesPrimitiveAxisView {
 	public fixedCoordinate?(): number | undefined { return undefined; }
 	public text(): string {
 		const a = this._anchor === 'start' ? this._primitive.getStartAnchor() : this._primitive.getEndAnchor();
-		return a ? String(a.time) : '';
+		const fmt = this._primitive.getOptions().timeLabelFormatter;
+		return a ? (fmt ? fmt(a.time) : String(a.time)) : '';
 	}
 	public textColor(): string { return this._primitive.getOptions().labelTextColor; }
 	public backColor(): string { return this._primitive.getOptions().labelColor; }

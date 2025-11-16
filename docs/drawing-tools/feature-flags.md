@@ -49,3 +49,18 @@ size-limit 双基线（脚本骨架）
 注意
 - 请勿从公共入口直接或间接导入任何 src/drawing/tools/*，否则会破坏“未开不打包”的保证。
 - 仅允许生成器写入 __generated__ 子目录；稳定入口文件必须手写维护并带注释 “@generated-entry”。
+
+## 启用方式（必须使用 dot-key）
+
+- Beta 工具必须通过 dot-key 启用：`drawingTools.<tool>`，同时主开关 `drawingTools` 需要开启。
+- 以矩形为例，必须如下启用（仅设置 canonical 键 `rectangle` 不会生效）：
+
+```js
+import { setFeatureFlags } from 'lightweight-charts/feature-flags';
+setFeatureFlags({
+  drawingTools: true,
+  'drawingTools.rectangle': true,
+});
+```
+
+- 运行时守卫以 dot-key 为准，参考构造阶段的双重校验入口（见 [function ensureFeatureFlagEnabled](lightweight-charts/src/feature-flags.ts:230) 与 [class RectangleDrawingPrimitive](lightweight-charts/src/drawing/tools/rectangle.impl.ts:76)）。

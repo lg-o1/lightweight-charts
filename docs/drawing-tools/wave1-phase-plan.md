@@ -14,6 +14,53 @@
 5. **文档模板**：Rectangle 示例与官网说明作为后续工具模板。
 6. **插件评估**：`plugin-examples` 内相关工具复用程度已记录。
 
+### Pre-Wave1 加固项（Wave0 加固 gating）
+
+为确保 Wave1 顺利推进，Wave0 在进入 Wave1 前需完成以下加固，并在 CI 中以 scripts.verify 执行为准（含 flags-off 与 flags-on 双模式）：
+
+- 交互复杂度拆解（统一实现模板）
+  - 将当前工具中的“点击/移动”大函数拆分为更小的交互原语：开始锚定、完成锚定、开始句柄编辑、应用句柄增量、开始主体拖拽、应用主体增量、取消指针等；要求每个原语具备独立单测与最小副作用。
+  - 要求：任何工具不得在实现层直接订阅键盘事件；键盘事件统一由控制器转发（见“键盘事件集中管理”）。
+  - 参考实现目录：[src/drawing/tools](lightweight-charts/src/drawing/tools) 与运行时几何：[src/drawing/runtime/geometry.ts](lightweight-charts/src/drawing/runtime/geometry.ts)。
+
+- 样式与配置统一（上移到 TDS/options/集中默认）
+  - 将句柄样式、光环、游标、hover/active 视觉状态等从具体工具实现层上移到 TDS/options 或集中默认配置，以便主题一致性与复用。
+  - 生成模板需支持读取集中默认配置并允许工具覆写（schema 增加 handle 样式段）。
+  - 涉及模板：
+    - [packages/drawing-tools-generator/src/templates/tool.ts.tpl](lightweight-charts/packages/drawing-tools-generator/src/templates/tool.ts.tpl)
+    - [packages/drawing-tools-generator/src/templates/runtime.ts.tpl](lightweight-charts/packages/drawing-tools-generator/src/templates/runtime.ts.tpl)
+    - [packages/drawing-tools-generator/src/templates/doc.md.tpl](lightweight-charts/packages/drawing-tools-generator/src/templates/doc.md.tpl)
+
+- 键盘事件集中管理（DrawingToolController）
+  - 引入控制器统一路由 Esc、Backspace、Enter、双击结束、多工具互斥与激活/取消；工具仅暴露“可取消/可完成/可删除/可撤销”等能力接口，由控制器调度。
+  - E2E 要求：多工具切换互斥无冲突、键盘事件不会泄漏到非激活工具。
+  - 建议新增入口与文档，目录与文件名在设计评审后落地。
+
+- BusinessDay 专项测试（时间轴一致性）
+  - 在 BusinessDay 时间轴上补充：添加、主体拖拽往返（像素→时间→像素）一致性、跨非交易日边界、锚点量化/取整策略、序列化往返。
+  - 测试位置建议：
+    - E2E 交互：[tests/e2e/interactions/test-cases/drawing](lightweight-charts/tests/e2e/interactions/test-cases/drawing)
+    - 单测矩阵：[tests/unittests/drawing](lightweight-charts/tests/unittests/drawing)
+
+- 二级入口最小 API（默认入口零引用）
+  - 规划二级入口 `lightweight-charts/drawing-tools`，仅暴露最小 API（例如 `chart.drawingTools().addRectangle(options)`），与 flags-on 按需导出结合，确保默认入口不引用绘图代码。
+  - 需在打包与导出层添加映射与 Flag 守卫：
+    - [rollup.config.js](lightweight-charts/rollup.config.js)
+    - [package.json](lightweight-charts/package.json)
+  - 增加 flags-off/flags-on 双模式 E2E 打包对照，验证“默认包不含绘图导出”。
+
+- CI 与基线要求（作为 Wave0 验收 gating）
+  - 运行 [package.json](lightweight-charts/package.json) 的 scripts.verify 全链路通过，含：
+    - 生成链校验（generate --check / check-entries / check-generated）
+    - 构建产物校验（tsc-verify / build:prod）
+    - 单测 / 类型测试 / E2E（交互 + 内存）/ size-limit 双模式
+  - 性能：≥200 形状实例下连续 5s 拖拽稳定（无掉帧预警、无控制台错误）。
+  - 内存：memlab attach/detach 循环、销毁图表后可回收，泄漏基线通过。
+  - 文档：新增矩形示例与教程，作为 Wave1 工具文档模板：
+    - [docs/examples/drawing/rectangle/README.md](lightweight-charts/docs/examples/drawing/rectangle/README.md)
+
+- DoD（Definition of Done）
+  - 完成本节所有项并在 CI 中以 scripts.verify 严格通过，方可切换到 Wave1 Phase 1A。
 ---
 
 ## 2. 阶段拆分

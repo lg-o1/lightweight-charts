@@ -178,7 +178,10 @@ async function performAction(
 			{
 				const boundingBox = await target.boundingBox();
 				if (boundingBox) {
-					await page.mouse.move(boundingBox.width / 2, boundingBox.height / 2);
+					await page.mouse.move(
+						boundingBox.x + boundingBox.width / 2,
+						boundingBox.y + boundingBox.height / 2
+					);
 				}
 			}
 			break;

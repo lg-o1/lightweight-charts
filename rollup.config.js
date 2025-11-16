@@ -20,6 +20,9 @@ function getCurrentVersion() {
 
 const currentVersion = getCurrentVersion();
 
+const flagsMode = String(process.env.LWC_SIZE_LIMIT_MODE || '').toLowerCase();
+const isFlagsOn = flagsMode === 'flags-on';
+
 const year = new Date().getFullYear();
 
 function getConfig(inputFile, { format, isProd, isStandalone }) {
@@ -49,8 +52,8 @@ function getConfig(inputFile, { format, isProd, isStandalone }) {
 					// make sure that this values are synced with src/typings/globals/index.d.ts
 					'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
 					'process.env.BUILD_VERSION': JSON.stringify(currentVersion),
-					'/*__DRAWING_EXPORTS__*/': process.env.LWC_SIZE_LIMIT_MODE === 'flags-on'
-						? 'export { RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec } from "./drawing/tools/rectangle.js";'
+					'/*__DRAWING_EXPORTS__*/': isFlagsOn
+						? 'export { RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec } from "./drawing/tools/rectangle.js"; export { setFeatureFlags, resetFeatureFlags, ensureFeatureFlagEnabled, requireEnabled, isEnabled, allFlags } from "./feature-flags.js";'
 						: '',
 				},
 			}),
@@ -97,6 +100,7 @@ modes.forEach(mode => {
 
 // eslint-disable-next-line no-console
 console.log(`Building version: ${currentVersion}`);
+console.log(`[Build] LWC_SIZE_LIMIT_MODE=${flagsMode || '(unset)'} => drawing exports ${isFlagsOn ? 'ENABLED' : 'DISABLED'}`);
 
 // eslint-disable-next-line import/no-default-export
 export default configs;

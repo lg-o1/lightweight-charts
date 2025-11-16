@@ -16,7 +16,6 @@ import { IPanePrimitive } from './ipane-primitive-api';
 import { IPriceScaleApi } from './iprice-scale-api';
 import { ISeriesApi } from './iseries-api';
 import { PriceScaleApi } from './price-scale-api';
-import { requireEnabled } from '../feature-flags';
 
 export class PaneApi<HorzScaleItem> implements IPaneApi<HorzScaleItem> {
 	protected readonly _chartApi: IChartApiBase<HorzScaleItem>;
@@ -84,7 +83,7 @@ export class PaneApi<HorzScaleItem> implements IPaneApi<HorzScaleItem> {
 	}
 
 	public attachPrimitive(primitive: IPanePrimitive<HorzScaleItem>): void {
-		requireEnabled('drawingTools', 'PaneApi.attachPrimitive');
+		// drawing tools gating is enforced at the primitive level (e.g., DrawingPrimitiveBase.attached)
 		this._pane.attachPrimitive(primitive as IPanePrimitiveBase<unknown>);
 		if (primitive.attached) {
 			primitive.attached({

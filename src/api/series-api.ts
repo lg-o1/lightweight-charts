@@ -38,7 +38,6 @@ import { BarsInfo, DataChangedHandler, DataChangedScope, ISeriesApi } from './is
 import { ISeriesPrimitive } from './iseries-primitive-api';
 import { priceLineOptionsDefaults } from './options/price-line-options-defaults';
 import { PriceLine } from './price-line-api';
-import { requireEnabled } from '../feature-flags';
 
 export class SeriesApi<
 	TSeriesType extends SeriesType,
@@ -249,7 +248,7 @@ export class SeriesApi<
 	}
 
 	public attachPrimitive(primitive: ISeriesPrimitive<HorzScaleItem>): void {
-		requireEnabled('drawingTools', 'SeriesApi.attachPrimitive');
+		// drawing tools gating is enforced at the primitive level (e.g., DrawingPrimitiveBase.attached)
 		// at this point we cast the generic to unknown because we
 		// don't want the model to know the types of the API (◑_◑)
 		this._series.attachPrimitive(primitive as ISeriesPrimitiveBase<unknown>);
