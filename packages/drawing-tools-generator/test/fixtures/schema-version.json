@@ -1,0 +1,17 @@
+﻿{
+  "toolId": "schemaMismatch",
+  "featureFlag": "drawingTools.schemaMismatch",
+  "schemaVersion": 999,
+  "anchors": [
+    { "id": "start", "type": "price-time" },
+    { "id": "end", "type": "price-time" }
+  ],
+  "states": ["idle", "completed"],
+  "handles": [
+    { "id": "corner", "type": "corner", "cursor": "default" }
+  ],
+  "views": {
+    "pane": { "renderer": "dummy", "zOrder": "normal" }
+  }
+}
+

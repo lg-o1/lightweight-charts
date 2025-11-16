@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Unified Framework — Final (Backfill precise retry + LOD + Offscreen Pool)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root{ --accent:#0b69ff; --muted:#586; --panel-bg:rgba(255,255,255,0.98) }
+*{box-sizing:border-box}
+body{ margin:0; font-family:Inter,Arial,Helvetica,sans-serif; background:#f4f6fb; color:#111 }
+#app{ width:1280px; margin:12px auto; }
+#chart-wrapper{ position:relative; height:760px; background:#fff; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.06); overflow:hidden }
+#chart{ width:100%; height:100%; }
+.control-bar{ position:absolute; left:12px; top:12px; width:520px; z-index:999; background:var(--panel-bg); border-radius:10px; padding:10px; box-shadow:0 14px 40px rgba(0,0,0,0.08) }
+.cb-head{ display:flex; gap:8px; align-items:center }
+.title{ font-weight:700; font-size:13px }
+.search{ flex:1; padding:6px 8px; border:1px solid #e6e9ef; border-radius:6px }
+.btn{ background:var(--accent); color:#fff; border:none; padding:6px 8px; border-radius:6px; cursor:pointer }
+.btn.ghost{ background:transparent; color:var(--accent); border:1px solid rgba(11,105,255,0.12) }
+.items-list{ margin-top:8px; max-height:420px; overflow:auto; border-radius:8px; border:1px solid #f0f2f5; padding:8px; background:#fff }
+.item-row{ display:flex; gap:8px; align-items:center; padding:6px; border-radius:6px; cursor:grab; position:relative }
+.item-row:hover{ background:#fafcff }
+.item-label{ flex:1; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.mini-ctrls{ display:flex; gap:6px; align-items:center }
+.mini-color{ width:20px; height:20px; border-radius:4px; border:1px solid #ddd }
+.alpha{ width:80px }
+.small-input{ width:60px }
+.metrics{ font-size:12px; color:var(--muted); margin-top:8px }
+
+.badge{ display:inline-block; padding:2px 6px; border-radius:8px; font-size:11px; background:#f3f7ff; color:var(--accent); margin-left:6px }
+.badge.warn{ background:#fff3e6; color:#b45b00 }
+.badge.miss{ background:#f6f6f6; color:#999 }
+
+.tooltip{ position:absolute; z-index:3000; background:#fff; padding:8px; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); font-size:12px; border:1px solid #eee }
+
+.fab-bar{ position:absolute; z-index:1200; right:12px; top:12px; display:flex; gap:8px; }
+
+.density-canvas{ position:absolute; left:0; top:0; right:0; bottom:0; pointer-events:none; z-index:950; display:none; }
+
+.backfill-panel{ position:absolute; right:12px; top:80px; width:360px; max-height:600px; overflow:auto; background:var(--panel-bg); border-radius:10px; padding:10px; box-shadow:0 14px 40px rgba(0,0,0,0.08); z-index:1300 }
+
+.list-chunk{ padding:6px; margin:6px 0; border-radius:6px; border:1px solid #eee; display:flex; justify-content:space-between; align-items:center; font-size:13px }
+.list-chunk.failed{ border-color:#f4cccc; background:#fff6f6 }
+.list-chunk.done{ border-color:#e6f4e6; background:#f6fffa }
+.list-chunk.pending{ border-color:#eef2ff; background:#f6fbff }
+
+.modal-backdrop{ position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:2000 }
+.modal{ width:980px; background:#fff; border-radius:10px; padding:12px; box-shadow:0 12px 40px rgba(0,0,0,0.2) }
+
+.notice{ padding:6px; background:#fff8e6; border-radius:6px; border:1px solid #ffeab8; color:#7a5a00; font-size:13px; margin-top:8px }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="chart-wrapper">
+    <div id="chart"></div>
+
+    <div class="control-bar" id="control-bar" role="region" aria-label="Control Bar">
+      <div class="cb-head">
+        <div class="title">Series Mapping</div>
+        <input id="search" class="search" placeholder="Search series / type / tf" />
+        <button id="open-add" class="btn">Add</button>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <select id="filter" style="width:160px;padding:6px;border-radius:6px;border:1px solid #e6e9ef">
+          <option value="all">All</option>
+          <option value="overlay">Overlay</option>
+          <option value="side">SidePane</option>
+          <option value="grouped">Grouped</option>
+        </select>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button id="btn-save-layout" class="btn ghost">Save</button>
+          <button id="btn-undo" class="btn ghost">Undo</button>
+          <button id="btn-export" class="btn ghost">Export</button>
+          <button id="btn-import" class="btn ghost">Import</button>
+          <input type="file" id="file-input" style="display:none" accept="application/json" />
+        </div>
+      </div>
+
+      <div class="items-list" id="items-list" tabindex="0" aria-label="Items"></div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div class="metrics" id="metrics">items: 0 • draw: - ms</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="density-toggle" class="btn ghost">Density: Auto</div>
+          <div id="lod-select" style="display:flex;gap:6px;align-items:center">
+            <label style="font-size:12px;color:var(--muted)">LOD</label>
+            <select id="lod-mode" style="padding:6px;border-radius:6px;border:1px solid #e6e9ef">
+              <option value="auto">auto</option>
+              <option value="on">on</option>
+              <option value="off">off</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="notice-area"></div>
+    </div>
+
+    <canvas id="densityCanvas" class="density-canvas"></canvas>
+
+    <div class="fab-bar">
+      <button id="btn-backfill-queue" class="btn ghost">Backfill Queue</button>
+      <button id="btn-open-backfill-panel" class="btn ghost">Backfill Panel</button>
+    </div>
+
+    <div id="backfill-panel" class="backfill-panel" style="display:none">
+      <div style="font-weight:700;margin-bottom:6px">Backfill Queue</div>
+      <div id="backfill-list"></div>
+      <div style="margin-top:8px">
+        <button id="btn-retry-selected-chunks" class="btn">Retry selected failed chunks</button>
+        <button id="btn-cancel-selected-chunks" class="btn ghost">Cancel selected</button>
+      </div>
+      <div style="margin-top:8px" id="backfill-log"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add Panel Modal root -->
+<div id="add-modal-root"></div>
+
+<script src="https://unpkg.com/lightweight-charts@5.0.2/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+/*
+  Final single-file demo.
+  Top-level configuration:
+*/
+window.USE_BACKEND = false; // set true to prefer backend endpoints
+window.BACKEND_BASE = 'http://localhost:3000'; // backend base URL if USE_BACKEND=true
+
+/* =========================
+   Worker: resample + EMA + backfill (with chunk metadata)
+   ========================= */
+const workerCode = `(function(){
+  let baseBars = [];
+  function bisectLeft(arr,t){ let lo=0,hi=arr.length; while(lo<hi){ const mid=(lo+hi)>>1; if(arr[mid].time < t) lo=mid+1; else hi=mid; } return lo; }
+  function insertBars(bars){ if(!bars||!bars.length) return; for(const b of bars){ const idx=bisectLeft(baseBars,b.time); if(idx<baseBars.length && baseBars[idx].time===b.time) baseBars[idx]=b; else baseBars.splice(idx,0,b); } }
+  function resampleSync(tf,start,end){
+    const buckets = new Map();
+    const lo = bisectLeft(baseBars, Math.max(0,start - tf));
+    for(let i=lo;i<baseBars.length;i++){
+      const b=baseBars[i];
+      if(b.time > end + tf) break;
+      const k=Math.floor(b.time/tf)*tf;
+      const cur=buckets.get(k);
+      if(!cur) buckets.set(k,{ time:k, open:b.open, high:b.high, low:b.low, close:b.close, volume:b.volume||0 });
+      else { cur.high=Math.max(cur.high,b.high); cur.low=Math.min(cur.low,b.low); cur.close=b.close; cur.volume += b.volume||0; }
+    }
+    return Array.from(buckets.values()).sort((a,b)=>a.time-b.time);
+  }
+  function calcEMA(tf,period,start,end){
+    const bars = resampleSync(tf,start,end);
+    const k = 2/(period+1);
+    let prev = null;
+    const pts = [];
+    for(let i=0;i<bars.length;i++){
+      const c = Number(bars[i].close);
+      prev = (i===0) ? c : c*k + prev*(1-k);
+      pts.push({ time: bars[i].time, value: +prev.toFixed(8) });
+    }
+    return pts;
+  }
+  function rangeChunks(start,end,chunkSec){
+    const out=[]; let s=start;
+    while(s<=end){ const e=Math.min(end, s + chunkSec - 1); out.push({start:s,end:e}); s = e + 1; }
+    return out;
+  }
+  onmessage = async (e)=>{ const m=e.data; if(!m||!m.type) return;
+    if(m.type==='push'){ insertBars(m.bars||[]); postMessage({ type:'pushed', count:(m.bars||[]).length }); return; }
+    if(m.type==='resample'){ const { tfSeconds, startTime, endTime, reqId } = m; const bars = resampleSync(tfSeconds,startTime,endTime); postMessage({ type:'resampleResult', tfSeconds, startTime, endTime, bars, reqId }); return; }
+    if(m.type==='calcIndicator'){ const { name, tfSeconds, period, startTime, endTime, reqId } = m; if(name==='ema'){ const points = calcEMA(tfSeconds,period,startTime,endTime); postMessage({ type:'indicatorResult', name, tfSeconds, period, startTime, endTime, points, reqId }); } return; }
+    if(m.type==='backfill'){ const { name, tfSeconds, period, startTime, endTime, reqId, chunkSec } = m;
+      const chunks = rangeChunks(startTime,endTime, chunkSec || (tfSeconds*500));
+      let completed=0;
+      for(const c of chunks){
+        try{
+          const points = calcEMA(tfSeconds, period, c.start, c.end);
+          postMessage({ type:'backfillChunk', reqId, chunk: c, points, status:'ok' });
+        }catch(err){
+          postMessage({ type:'backfillChunk', reqId, chunk: c, points: [], status:'failed', error: String(err) });
+        }
+        completed++;
+        postMessage({ type:'backfillProgress', reqId, progress: Math.round(100 * completed / chunks.length) });
+        await new Promise(r=>setTimeout(r, 30));
+      }
+      postMessage({ type:'backfillDone', reqId }); return;
+    }
+    if(m.type==='clear'){ baseBars=[]; postMessage({ type:'cleared' }); return; }
+  };
+})();`;
+const workerBlob = new Blob([workerCode], { type:'application/javascript' });
+const worker = new Worker(URL.createObjectURL(workerBlob));
+
+/* =========================
+   DataLayer (supports optional backend)
+   ========================= */
+class DataLayer {
+  constructor(worker){
+    this.worker = worker;
+    this.resampleCache = new Map();
+    this.indStore = new Map();
+    this.pending = new Map();
+    this.backfillTasks = new Map();
+    worker.onmessage = (e) => {
+      const m = e.data; if(!m||!m.type) return;
+      if(m.type === 'resampleResult'){
+        const key = this._rKey(m.tfSeconds,m.startTime,m.endTime);
+        this.resampleCache.set(key, { bars: m.bars, ts: Date.now(), start:m.startTime, end:m.endTime });
+        const p = this.pending.get(key); if(p){ p.resolve(m.bars); this.pending.delete(key); }
+      } else if(m.type === 'indicatorResult'){
+        this._mergeIndicator(m.name, m.tfSeconds, m.period, m.points);
+        const key = this._iKey(m.name,m.tfSeconds,m.period,m.startTime,m.endTime);
+        const p = this.pending.get(key); if(p){ p.resolve(m.points); this.pending.delete(key); }
+      } else if(m.type === 'backfillChunk'){
+        const { reqId, chunk, points, status, error } = m;
+        const task = this.backfillTasks.get(reqId);
+        if(!task) return;
+        const idx = task.chunks.findIndex(c => c.start===chunk.start && c.end===chunk.end);
+        if(idx >= 0){
+          task.chunks[idx] = Object.assign({}, task.chunks[idx], { status: status === 'ok' ? 'done' : 'failed', lastError: error || null, lastPoints: points||[] });
+          if(status === 'ok' && points && points.length){
+            const [name, tf, period] = task.meta.split(':');
+            this._mergeIndicator(name, Number(tf), Number(period), points);
+          }
+        } else {
+          task.chunks.push(Object.assign({}, chunk, { status: status==='ok'?'done':'failed', lastError: error||null, lastPoints: points||[] }));
+        }
+        const doneCount = task.chunks.filter(c=>c.status==='done').length;
+        const total = task.chunks.length;
+        task.progress = Math.round(100 * doneCount / Math.max(1,total));
+        const allProcessed = task.chunks.every(c=>c.status==='done' || c.status==='failed');
+        if(allProcessed) task.status = 'done';
+        this.backfillTasks.set(reqId, task);
+      } else if(m.type === 'backfillProgress'){
+        const { reqId, progress } = m;
+        const task = this.backfillTasks.get(reqId) || {};
+        task.progress = progress;
+        this.backfillTasks.set(reqId, task);
+      } else if(m.type === 'backfillDone'){
+        const { reqId } = m;
+        const task = this.backfillTasks.get(reqId) || {};
+        task.status = 'done';
+        task.progress = 100;
+        this.backfillTasks.set(reqId, task);
+      }
+    };
+  }
+  _rKey(tf,s,e){ const s0=Math.floor(s/tf)*tf, e0=Math.ceil(e/tf)*tf; return `${tf}:${s0}:${e0}`; }
+  _iKey(name,tf,p,s,e){ const s0=Math.floor(s/tf)*tf, e0=Math.ceil(e/tf)*tf; return `${name}:${tf}:${p}:${s0}:${e0}`; }
+  pushBaseBars(bars){ if(!bars||!bars.length) return; try{ this.worker.postMessage({ type:'push', bars }); }catch(e){} }
+  async getBars(tfSeconds,startTime,endTime){
+    if(window.USE_BACKEND){
+      try{
+        const res = await fetch(window.BACKEND_BASE + `/bars?tf=${tfSeconds}&start=${startTime}&end=${endTime}`);
+        if(res.ok){ const json = await res.json(); return json.bars; }
+      }catch(e){ console.warn('backend getBars failed, falling back to worker', e); }
+    }
+    const key=this._rKey(tfSeconds,startTime,endTime);
+    const cached=this.resampleCache.get(key);
+    if(cached) return cached.bars;
+    if(this.pending.has(key)) return this.pending.get(key).promise;
+    let res,rej; const p=new Promise((r,j)=>{res=r;rej=j});
+    this.pending.set(key,{promise:p,resolve:res,reject:rej});
+    try{ this.worker.postMessage({ type:'resample', tfSeconds, startTime, endTime, reqId:key+':'+Date.now() }); }catch(e){ this.pending.delete(key); rej(e); }
+    return p;
+  }
+  preloadIndicator(name, tf, period, points){
+    if(!points||!points.length) return;
+    const k=`${name}:${tf}:${period}`;
+    const existing=(this.indStore.get(k)&&this.indStore.get(k).points)||[];
+    const map=new Map();
+    for(const p of existing) map.set(p.time,p.value);
+    for(const p of points) map.set(p.time,p.value);
+    const merged=Array.from(map.entries()).map(([time,value])=>({ time:Number(time), value })).sort((a,b)=>a.time-b.time);
+    this.indStore.set(k,{ points: merged, start: merged[0].time, end: merged[merged.length-1].time });
+  }
+  _mergeIndicator(name, tf, period, points){
+    if(!points||!points.length) return;
+    const k=`${name}:${tf}:${period}`;
+    const existing=(this.indStore.get(k)&&this.indStore.get(k).points)||[];
+    const map=new Map();
+    for(const p of existing) map.set(p.time,p.value);
+    for(const p of points) map.set(p.time,p.value);
+    const merged=Array.from(map.entries()).map(([time,value])=>({ time:Number(time), value })).sort((a,b)=>a.time-b.time);
+    this.indStore.set(k,{ points: merged, start: merged[0].time, end: merged[merged.length-1].time });
+  }
+  _indicatorMissingRanges(name,tf,period,start,end){
+    const k=`${name}:${tf}:${period}`; const cur=this.indStore.get(k);
+    if(!cur) return [{ start, end }];
+    if(cur.start <= start && cur.end >= end) return [];
+    const missing=[];
+    if(start < cur.start) missing.push({ start, end: Math.min(end, cur.start - tf) });
+    if(end > cur.end) missing.push({ start: Math.max(start, cur.end + tf), end });
+    return missing.filter(r=>r.start<=r.end);
+  }
+  async calcIndicator(name, tf, period, start, end){
+    if(window.USE_BACKEND){
+      try{
+        const res = await fetch(window.BACKEND_BASE + `/indicator?name=${name}&tf=${tf}&period=${period}&start=${start}&end=${end}`);
+        if(res.ok){ const json = await res.json(); if(json.points){ this._mergeIndicator(name, tf, period, json.points); return json.points; } }
+      }catch(e){ console.warn('backend calcIndicator failed, falling back to worker', e); }
+    }
+    const k=`${name}:${tf}:${period}`; const cur=this.indStore.get(k);
+    if(cur && cur.start <= start && cur.end >= end) return cur.points.filter(p=>p.time>=start && p.time<=end);
+    const missing=this._indicatorMissingRanges(name,tf,period,start,end);
+    const tasks = missing.map(r=>{
+      const ik=this._iKey(name,tf,period,r.start,r.end);
+      if(this.pending.has(ik)) return this.pending.get(ik).promise;
+      let res,rej; const p=new Promise((rj,ej)=>{res=rj;rej=ej});
+      this.pending.set(ik,{promise:p,resolve:res,reject:rej});
+      try{ this.worker.postMessage({ type:'calcIndicator', name, tfSeconds:tf, period, startTime:r.start, endTime:r.end, reqId:ik+':'+Date.now() }); }catch(e){ this.pending.delete(ik); rej(e); }
+      return p;
+    });
+    await Promise.allSettled(tasks);
+    const merged=(this.indStore.get(k)&&this.indStore.get(k).points)||[];
+    return merged.filter(p=>p.time>=start && p.time<=end);
+  }
+  startBackfill(name, tf, period, start, end, opts={}){
+    const reqMeta = `${name}:${tf}:${period}`;
+    const reqId = `backfill::${reqMeta}::${Date.now()}`;
+    const chunkSec = opts.chunkSec || (tf * 400);
+    const chunks = [];
+    let s = start;
+    while(s <= end){
+      const e = Math.min(end, s + chunkSec - 1);
+      chunks.push({ start: s, end: e, status: 'pending' });
+      s = e + 1;
+    }
+    this.backfillTasks.set(reqId, { status:'running', progress:0, meta: reqMeta, chunks, createdAt: Date.now() });
+    if(window.USE_BACKEND){
+      // send to backend (best-effort). backend should handle and provide status endpoint in production.
+      fetch(window.BACKEND_BASE + '/backfill', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ name, tf, period, start, end, reqId })
+      }).then(res=>{
+        if(!res.ok){
+          this.worker.postMessage({ type:'backfill', name, tfSeconds:tf, period, startTime:start, endTime:end, reqId, chunkSec });
+        }
+      }).catch(err=>{
+        this.worker.postMessage({ type:'backfill', name, tfSeconds:tf, period, startTime:start, endTime:end, reqId, chunkSec });
+      });
+    } else {
+      try{
+        this.worker.postMessage({ type:'backfill', name, tfSeconds:tf, period, startTime:start, endTime:end, reqId, chunkSec });
+      }catch(e){
+        this.backfillTasks.set(reqId, { status:'error', progress:0, meta:reqMeta, error:String(e), chunks });
+      }
+    }
+    // persist task to localStorage for resume
+    try{ localStorage.setItem('bf::'+reqId, JSON.stringify(this.backfillTasks.get(reqId))); }catch(e){}
+    return reqId;
+  }
+  retryBackfillChunks(reqId, chunkIndices){
+    const task = this.backfillTasks.get(reqId);
+    if(!task) return null;
+    const [name, tfStr, periodStr] = task.meta.split(':');
+    const tf = Number(tfStr), period = Number(periodStr);
+    const selected = chunkIndices.map(i=>task.chunks[i]).filter(Boolean);
+    if(!selected.length) return null;
+    selected.sort((a,b)=>a.start - b.start);
+    const mergedRanges = [];
+    for(const s of selected){
+      const last = mergedRanges[mergedRanges.length-1];
+      if(!last || s.start > last.end + 1) mergedRanges.push({ start: s.start, end: s.end });
+      else last.end = Math.max(last.end, s.end);
+    }
+    const retryReqId = `backfill_retry::${task.meta}::${Date.now()}`;
+    this.backfillTasks.set(retryReqId, { status:'running', progress:0, meta: task.meta, chunks: mergedRanges.map(r=>Object.assign({},r,{status:'pending'})), parent:reqId, createdAt: Date.now() });
+    for(const r of mergedRanges){
+      try{
+        if(window.USE_BACKEND){
+          fetch(window.BACKEND_BASE + '/backfill', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, tf, period, start: r.start, end: r.end, reqId: retryReqId })});
+        } else {
+          this.worker.postMessage({ type:'backfill', name, tfSeconds:tf, period, startTime:r.start, endTime:r.end, reqId: retryReqId, chunkSec: (r.end - r.start + 2) });
+        }
+      }catch(e){
+        const t=this.backfillTasks.get(retryReqId)||{}; t.status='error'; t.error=String(e); this.backfillTasks.set(retryReqId,t);
+      }
+    }
+    try{ localStorage.setItem('bf::'+retryReqId, JSON.stringify(this.backfillTasks.get(retryReqId))); }catch(e){}
+    return retryReqId;
+  }
+  getBackfillStatus(reqId){ return this.backfillTasks.get(reqId) || null; }
+  listBackfillTasks(){ return Array.from(this.backfillTasks.entries()).slice().reverse(); }
+}
+
+/* =========================
+   OffscreenCanvas Pool (simple)
+   ========================= */
+class OffscreenPool {
+  constructor(size = 4){
+    this.size = size;
+    this.pool = [];
+    this.inUse = new Set();
+    for(let i=0;i<size;i++){
+      try{
+        const c = new OffscreenCanvas(1024,512);
+        this.pool.push(c);
+      }catch(e){
+        this.pool.push(null);
+      }
+    }
+  }
+  acquire(){
+    for(const c of this.pool){
+      if(!this.inUse.has(c)){
+        this.inUse.add(c);
+        return c;
+      }
+    }
+    return null;
+  }
+  release(c){
+    this.inUse.delete(c);
+  }
+}
+const offscreenPool = new OffscreenPool(6);
+
+/* =========================
+   Chart + Manager (LOD-aware)
+   ========================= */
+const { createChart } = window.LightweightCharts;
+const chartDiv = document.getElementById('chart');
+const chart = createChart(chartDiv, { width: 1200, height: 760, layout:{ background:{ color:'#fff' }, textColor:'#222' }, rightPriceScale:{ visible:true }, timeScale:{ timeVisible:true, rightOffset:12 } });
+const mainSeries = chart.addCandlestickSeries();
+
+/* demo data (minute bars) */
+function genMinuteBars(startUnixSec,count){
+  const bars=[]; let p=100; let t=startUnixSec;
+  for(let i=0;i<count;i++){ const open=p; const high=open + Math.random()*2.8; const low=open - Math.random()*2.8; const close=low + Math.random()*(high-low); p=close; bars.push({ time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2), volume: Math.round(100+Math.random()*800) }); t+=60; }
+  return bars;
+}
+const now = Math.floor(Date.now()/1000);
+window.baseBars = genMinuteBars(now - 24*60*60, 24*60);
+mainSeries.setData(window.baseBars.map(b=>({ time:b.time, open:b.open, high:b.high, low:b.low, close:b.close })));
+chart.timeScale().fitContent();
+const dataLayer = new DataLayer(worker);
+dataLayer.pushBaseBars(window.baseBars);
+
+/* Manager */
+class Manager {
+  constructor(chart, mainSeries, dataLayer){
+    this.chart = chart; this.mainSeries = mainSeries; this.dataLayer = dataLayer;
+    this.items = []; this.metrics = { drawAvg:0, draws:0 }; this.pending=false;
+    this.densityMode = 'auto';
+    this.lodMode = 'auto';
+  }
+  attach(){
+    try{
+      if(chart.addPrimitive) { chart.addPrimitive(this); }
+      else { setInterval(()=>this.requestUpdate(), 250); }
+    }catch(e){ setInterval(()=>this.requestUpdate(), 250); }
+  }
+  register(item){ this.items.push(item); this.items.sort((a,b)=>(b.priority||0)-(a.priority||0)); this.requestUpdate(); return item.id; }
+  unregister(id){ const idx=this.items.findIndex(x=>x.id===id); if(idx>=0){ const it=this.items.splice(idx,1)[0]; if(it.onDetach) it.onDetach(); this.requestUpdate(); } }
+  setVisible(id,v){ const it=this.items.find(i=>i.id===id); if(it){ it.visible=!!v; this.requestUpdate(); } }
+  setStyle(id,style){ const it=this.items.find(i=>i.id===id); if(it){ Object.assign(it,style); this.requestUpdate(); } }
+  setPriority(id,p){ const it=this.items.find(i=>i.id===id); if(it){ it.priority=p; this.items.sort((a,b)=>(b.priority||0)-(a.priority||0)); this.requestUpdate(); } }
+  requestUpdate(){ if(this.pending) return; this.pending=true; requestAnimationFrame(()=>{ this.pending=false; try{ if(chart.requestUpdate) chart.requestUpdate(); }catch(e){} }); }
+  get paneViews(){ const self=this; return [{ zOrder:1, renderer:{ draw: (target)=>{ self._drawAll(target.context); } } }]; }
+
+  _makeHelpers(ctx){
+    const timeScale = this.chart.timeScale(); const vr = timeScale.getVisibleRange() || {}; const startTime = vr.from, endTime = vr.to;
+    return { timeToX: (t)=>{ try{ return timeScale.timeToCoordinate(t); }catch(e){} return ctx.canvas.width/2; }, priceToY: (p)=>{ try{ return this.mainSeries.priceToCoordinate(p); }catch(e){} return ctx.canvas.height/2; }, visibleRange:{ startTime, endTime }, canvas: ctx.canvas, width: ctx.canvas.width };
+  }
+
+  shouldUseDensity(){
+    if(this.lodMode === 'off') return false;
+    if(this.lodMode === 'on') return true;
+    const vr = this.chart.timeScale().getVisibleRange() || {}; const start = vr.from || 0, end = vr.to || 1;
+    const visibleBars = end - start; const width = (this.chart._internal_bindings && this.chart._internal_bindings.container) ? this.chart._internal_bindings.container.clientWidth : 1200;
+    const barsPerPixel = visibleBars / Math.max(1,width);
+    const overlayCount = this.items.filter(i=>i.visible && i.displayMode === 'overlay').length;
+    return (barsPerPixel > 3) || (overlayCount > 8);
+  }
+
+  async _prepareAll(helpers){
+    const visible = this.items.filter(i=>i.visible && !i._suppressPrepare);
+    const TIMEOUT_MS = 900;
+    const promises = visible.map(it => {
+      if(!it.prepare) return Promise.resolve(null);
+      try{ return Promise.race([ it.prepare(helpers, this.dataLayer), new Promise(res=>setTimeout(()=>res('__timeout__'), TIMEOUT_MS)) ]); }catch(e){ console.error('prepare error',e); return Promise.resolve(null); }
+    });
+    await Promise.all(promises);
+  }
+
+  async _drawAll(ctx){
+    const t0 = performance.now();
+    const helpers = this._makeHelpers(ctx);
+    await this._prepareAll(helpers);
+
+    const useDensity = (this.densityMode === 'on') || (this.densityMode === 'auto' && this.shouldUseDensity());
+    const densityCanvas = document.getElementById('densityCanvas');
+    if(useDensity){
+      densityCanvas.style.display = 'block';
+      const off = offscreenPool.acquire();
+      if(off){
+        const offCtx = off.getContext('2d');
+        off.width = ctx.canvas.width; off.height = ctx.canvas.height;
+        offCtx.clearRect(0,0,off.width,off.height);
+        for(const it of this.items.filter(i=>i.visible && i.displayMode==='overlay').sort((a,b)=>(b.lodPriority||b.priority||0)-(a.lodPriority||a.priority||0))){
+          try{ if(it.offscreenDraw) it.offscreenDraw(offCtx, helpers); else if(it.draw) it.draw(offCtx, helpers); }catch(e){ console.error('offscreen draw err', e); }
+        }
+        const mainD = densityCanvas;
+        mainD.width = ctx.canvas.width; mainD.height = ctx.canvas.height; const md = mainD.getContext('2d');
+        md.clearRect(0,0,mainD.width, mainD.height);
+        md.globalAlpha = 0.95;
+        md.drawImage(off, 0, 0, mainD.width, mainD.height);
+        offscreenPool.release(off);
+      } else {
+        const md = densityCanvas.getContext('2d');
+        md.clearRect(0,0,densityCanvas.width, densityCanvas.height);
+        for(const it of this.items.filter(i=>i.visible && i.displayMode==='overlay').sort((a,b)=>(b.lodPriority||b.priority||0)-(a.lodPriority||a.priority||0))){
+          try{ if(it.draw) it.draw(md, helpers); }catch(e){ console.error('draw err', e); }
+        }
+      }
+    } else {
+      densityCanvas.style.display = 'none';
+    }
+
+    const itemsToDraw = this.items.filter(it=>it.visible && (it.displayMode !== 'overlay' || !useDensity));
+    itemsToDraw.sort((a,b)=>(b.priority||0)-(a.priority||0));
+    for(const it of itemsToDraw){
+      try{ if(it.draw) it.draw(ctx, helpers); }catch(e){ console.error('draw item',it.id,e); }
+    }
+
+    const t1 = performance.now();
+    const dt = t1-t0; this.metrics.drawAvg = ((this.metrics.drawAvg*(this.metrics.draws||0)) + dt)/((this.metrics.draws||0)+1); this.metrics.draws=(this.metrics.draws||0)+1;
+    document.getElementById('metrics').textContent = `items: ${this.items.length} • draw: ${Math.round(dt)} ms`;
+  }
+}
+const manager = new Manager(chart, mainSeries, dataLayer);
+manager.attach();
+
+/* =========================
+   Item factories
+   ========================= */
+function hexToRgba(hex,a){ if(!hex) return `rgba(0,0,0,${a||1})`; const h=hex.replace('#',''); const bi=parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h,16); const r=(bi>>16)&255,g=(bi>>8)&255,b=bi&255; return `rgba(${r},${g},${b},${a})`; }
+
+let idCounter = 1;
+function createHTFItem(seriesId, tfSeconds=900, color='#ff6b00', alpha=0.18, priority=100, displayMode='overlay', lodPriority=100){
+  const id = seriesId || 'htf-'+(idCounter++);
+  return {
+    id, type:'htf', seriesId, tfSeconds, color, alpha, priority, displayMode, lodPriority, visible:true, _cachedBars:[],
+    async prepare(helpers, dataLayer){
+      const s=(helpers.visibleRange && helpers.visibleRange.startTime) || window.baseBars[0].time;
+      const e=(helpers.visibleRange && helpers.visibleRange.endTime) || window.baseBars[window.baseBars.length-1].time;
+      try{ this._cachedBars = await dataLayer.getBars(this.tfSeconds, Math.max(0, s - this.tfSeconds*4), (e||0) + this.tfSeconds*4); }catch(e){ this._cachedBars=[]; }
+    },
+    draw(ctx, helpers){
+      if(this.displayMode !== 'overlay') return;
+      const bars = this._cachedBars || []; if(!bars.length) return;
+      ctx.save();
+      const step = Math.max(1, Math.floor(bars.length / 1200));
+      for(let i=0;i<bars.length;i+=step){
+        const b = bars[i]; const x = helpers.timeToX(b.time); const w = Math.max(2, 6*(this.tfSeconds/60));
+        const yO=helpers.priceToY(b.open), yC=helpers.priceToY(b.close), yH=helpers.priceToY(b.high), yL=helpers.priceToY(b.low);
+        ctx.beginPath(); ctx.moveTo(x,yH); ctx.lineTo(x,yL); ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1; ctx.stroke();
+        const top=Math.min(yO,yC), h=Math.max(1, Math.abs(yO-yC));
+        ctx.fillStyle = hexToRgba(this.color, this.alpha); ctx.fillRect(x-w/2, top, w, h);
+      }
+      ctx.restore();
+    },
+    offscreenDraw(ctx, helpers){
+      this.draw(ctx, helpers);
+    },
+    serialize(){ return { id:this.id, type:this.type, seriesId:this.seriesId, tfSeconds:this.tfSeconds, color:this.color, alpha:this.alpha, priority:this.priority, displayMode:this.displayMode, visible:this.visible }; },
+    onDetach(){ this._cachedBars = null; }
+  };
+}
+
+function createEMAItem(seriesId, period=20, tfSeconds=60, color='#0066ff', alpha=1, priority=200, displayMode='overlay', lodPriority=200){
+  const id = (seriesId||'ema') + '-' + (idCounter++);
+  return {
+    id, type:'ema', seriesId, period, tfSeconds, color, alpha, priority, displayMode, lodPriority, visible:true, _cachedPoints:[],
+    async prepare(helpers, dataLayer){
+      const s=(helpers.visibleRange && helpers.visibleRange.startTime) || window.baseBars[0].time;
+      const e=(helpers.visibleRange && helpers.visibleRange.endTime) || window.baseBars[window.baseBars.length-1].time;
+      try{ this._cachedPoints = await dataLayer.calcIndicator('ema', this.tfSeconds, this.period, Math.max(0, s - this.tfSeconds*4), (e||0) + this.tfSeconds*4); }catch(e){ this._cachedPoints = []; }
+    },
+    draw(ctx, helpers){
+      if(this.displayMode !== 'overlay') return;
+      const pts=this._cachedPoints||[]; if(!pts.length) return;
+      ctx.save(); ctx.beginPath(); ctx.lineWidth=1.6; ctx.strokeStyle = hexToRgba(this.color, this.alpha);
+      let started=false;
+      for(const p of pts){ const x = helpers.timeToX(p.time); const y = helpers.priceToY(p.value); if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y); }
+      ctx.stroke(); ctx.restore();
+    },
+    offscreenDraw(ctx, helpers){
+      const pts=this._cachedPoints||[]; if(!pts.length) return;
+      ctx.save(); ctx.beginPath(); ctx.lineWidth=1.2; ctx.strokeStyle = hexToRgba(this.color, Math.min(1,this.alpha*0.9));
+      let started=false;
+      for(const p of pts){ const x = helpers.timeToX(p.time); const y = helpers.priceToY(p.value); if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y); }
+      ctx.stroke(); ctx.restore();
+    },
+    serialize(){ return { id:this.id, type:this.type, seriesId:this.seriesId, period:this.period, tfSeconds:this.tfSeconds, color:this.color, alpha:this.alpha, priority:this.priority, displayMode:this.displayMode, visible:this.visible }; },
+    onDetach(){ this._cachedPoints = null; }
+  };
+}
+
+/* =========================
+   Backend series demo preload
+   ========================= */
+const backendSeries = [
+  { seriesId:'kline_1m', label:'KLINE 1m', type:'bars', tf:60 },
+  { seriesId:'kline_5m', label:'KLINE 5m', type:'bars', tf:300 },
+  { seriesId:'ema_1m_20', label:'EMA 1m 20', type:'indicator', name:'ema', tf:60, period:20 },
+  { seriesId:'ema_5m_20', label:'EMA 5m 20', type:'indicator', name:'ema', tf:300, period:20 },
+  { seriesId:'ema_1h_20', label:'EMA 1h 20', type:'indicator', name:'ema', tf:3600, period:20 }
+];
+(function demoPreload(){ const bars = window.baseBars; const pts = []; for(let i=0;i<bars.length;i+=5){ const chunk = bars.slice(i,i+5); if(!chunk.length) continue; pts.push({ time: chunk[chunk.length-1].time, value: Number(chunk[chunk.length-1].close) }); } dataLayer.preloadIndicator('ema', 300, 20, pts); })();
+
+/* =========================
+   UI wiring
+   ========================= */
+const itemsListEl = document.getElementById('items-list');
+const openAddBtn = document.getElementById('open-add');
+const addModalRoot = document.getElementById('add-modal-root');
+const densityToggle = document.getElementById('density-toggle');
+const lodModeSelect = document.getElementById('lod-mode');
+const backfillPanel = document.getElementById('backfill-panel');
+const backfillListEl = document.getElementById('backfill-list');
+const btnOpenBackfillPanel = document.getElementById('btn-open-backfill-panel');
+const btnRetrySelected = document.getElementById('btn-retry-selected-chunks');
+const btnCancelSelected = document.getElementById('btn-cancel-selected-chunks');
+
+function renderItemsList(){ itemsListEl.innerHTML=''; for(const it of manager.items){
+  const row=document.createElement('div'); row.className='item-row'; row.dataset.itemId=it.id;
+  const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!it.visible; cb.onchange=()=>{ manager.setVisible(it.id, cb.checked); saveLayoutDebounced(); };
+  row.appendChild(cb);
+  const lbl=document.createElement('div'); lbl.className='item-label'; lbl.textContent = `${it.id} (${it.type}) • ${it.displayMode} • tf=${it.tfSeconds||''}`;
+  row.appendChild(lbl);
+  const covWrap=document.createElement('div'); covWrap.style.minWidth='90px';
+  if(it.type==='ema'){ const vr=chart.timeScale().getVisibleRange()||{}; const cov=dataLayer.getCoverageDetailed ? dataLayer.getCoverageDetailed('ema', it.tfSeconds, it.period||20, vr.from, vr.to) : { coveragePercent:0, status:'missing' }; const badge=document.createElement('span'); badge.className='badge'; badge.textContent=(cov.coveragePercent||0)+'%'; if(cov.status==='missing') badge.className='badge miss'; else if(cov.status==='partial') badge.className='badge warn'; badge.addEventListener('mouseenter',(e)=>showCoverageTooltip(e,cov,it)); badge.addEventListener('mouseleave',hideTooltip); covWrap.appendChild(badge); }
+  row.appendChild(covWrap);
+  const mini=document.createElement('div'); mini.className='mini-ctrls';
+  const col=document.createElement('input'); col.type='color'; col.className='mini-color'; col.value=it.color||'#ff6b00'; col.onchange=()=>{ manager.setStyle(it.id,{color:col.value}); saveLayoutDebounced(); };
+  mini.appendChild(col);
+  const alpha=document.createElement('input'); alpha.type='range'; alpha.min=0; alpha.max=1; alpha.step=0.05; alpha.value=it.alpha!=null?it.alpha:1; alpha.className='alpha'; alpha.oninput=()=>{ manager.setStyle(it.id,{alpha:Number(alpha.value)}); };
+  mini.appendChild(alpha);
+  row.appendChild(mini);
+  row.addEventListener('mouseenter', ()=> showFloatingControls(row, it)); row.addEventListener('mouseleave', hideFloatingControls);
+  itemsListEl.appendChild(row);
+ }
+ document.getElementById('metrics').textContent = `items: ${manager.items.length} • draw: - ms`;
+}
+
+openAddBtn.onclick = ()=> openAddPanel();
+
+function openAddPanel(){ addModalRoot.innerHTML=''; const backdrop=document.createElement('div'); backdrop.className='modal-backdrop'; const modal=document.createElement('div'); modal.className='modal'; modal.style.width='960px';
+  const header=document.createElement('div'); header.style.display='flex'; header.style.justifyContent='space-between'; header.style.alignItems='center'; header.innerHTML = `<div style="font-weight:700">Add Series</div><div><button id="close-add" class="btn ghost">Close</button></div>`; modal.appendChild(header);
+  const container=document.createElement('div'); container.style.display='flex'; container.style.gap='12px'; container.style.marginTop='8px';
+  const left=document.createElement('div'); left.style.width='320px'; left.innerHTML='<div style="font-weight:600;margin-bottom:6px">Available</div>'; const list=document.createElement('div'); list.style.maxHeight='420px'; list.style.overflow='auto';
+  backendSeries.forEach(s=>{ const li=document.createElement('div'); li.className='list-item'; li.style.display='flex'; li.style.justifyContent='space-between'; li.style.padding='8px'; li.dataset.series=JSON.stringify(s); const lab=document.createElement('div'); lab.innerHTML=`<strong>${s.label}</strong><div style="color:var(--muted);font-size:12px">${s.type}${s.period? ' • p:'+s.period : ''}</div>`; li.appendChild(lab); const right=document.createElement('div'); right.style.display='flex'; right.style.flexDirection='column'; right.style.alignItems='flex-end'; const badge=document.createElement('span'); badge.className='badge miss'; badge.textContent='...'; right.appendChild(badge); li.appendChild(right); list.appendChild(li);
+    if(s.type==='indicator'){ const vr=chart.timeScale().getVisibleRange()||{}; const cov={ status:'partial' }; badge.textContent=(cov.status||'...'); if(cov.status==='missing') badge.className='badge miss'; else if(cov.status==='partial') badge.className='badge warn'; badge.addEventListener('mouseenter',(e)=>showCoverageTooltip(e,cov,s)); badge.addEventListener('mouseleave',hideTooltip); } else badge.textContent='available';
+    li.onclick=()=> li.classList.toggle('selected');
+  });
+  left.appendChild(list); container.appendChild(left);
+
+  const right=document.createElement('div'); right.style.flex='1'; right.innerHTML='<div style="font-weight:600;margin-bottom:6px">Config</div>';
+  const modeSel=document.createElement('select'); ['overlay','sidepane','mini'].forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; modeSel.appendChild(o); }); right.appendChild(document.createTextNode('Mode: ')); right.appendChild(modeSel); right.appendChild(document.createElement('br'));
+  right.appendChild(document.createTextNode('Color: ')); const colorInp=document.createElement('input'); colorInp.type='color'; colorInp.value='#0b69ff'; right.appendChild(colorInp); right.appendChild(document.createElement('br'));
+  right.appendChild(document.createTextNode('Opacity: ')); const opa=document.createElement('input'); opa.type='range'; opa.min=0; opa.max=1; opa.step=0.05; opa.value=0.35; right.appendChild(opa); right.appendChild(document.createElement('br'));
+  right.appendChild(document.createTextNode('Priority: ')); const prio=document.createElement('input'); prio.type='number'; prio.className='small-input'; prio.value=100; right.appendChild(prio); right.appendChild(document.createElement('br'));
+  right.appendChild(document.createTextNode('LOD Priority: ')); const lodprio=document.createElement('input'); lodprio.type='number'; lodprio.className='small-input'; lodprio.value=100; right.appendChild(lodprio); right.appendChild(document.createElement('br'));
+  const addBtn=document.createElement('button'); addBtn.className='btn'; addBtn.textContent='Add Selected'; right.appendChild(addBtn);
+  right.appendChild(document.createElement('div')); right.appendChild(document.createElement('br'));
+  right.appendChild(document.createTextNode('Backfill options: ')); right.appendChild(document.createElement('br'));
+  const backfillBtn=document.createElement('button'); backfillBtn.className='btn ghost'; backfillBtn.textContent='Backfill Selected'; right.appendChild(backfillBtn);
+  const backfillRange=document.createElement('input'); backfillRange.type='text'; backfillRange.placeholder='e.g. 24h'; backfillRange.style.width='100%'; right.appendChild(backfillRange);
+
+  container.appendChild(right); modal.appendChild(container);
+  const footer=document.createElement('div'); footer.style.marginTop='10px'; footer.style.textAlign='right';
+  const closeBtn=document.createElement('button'); closeBtn.className='btn ghost'; closeBtn.textContent='Close'; closeBtn.onclick=()=> addModalRoot.innerHTML=''; footer.appendChild(closeBtn); modal.appendChild(footer);
+  backdrop.appendChild(modal); addModalRoot.appendChild(backdrop);
+  addModalRoot.querySelector('#close-add').onclick = ()=> addModalRoot.innerHTML='';
+
+  addBtn.onclick = ()=>{ const sels=Array.from(list.querySelectorAll('.list-item.selected')).map(el=>JSON.parse(el.dataset.series)); if(!sels.length){ alert('select at least one'); return; } for(const s of sels){ if(s.type==='bars') manager.register(createHTFItem(s.seriesId, s.tf||60, colorInp.value, Number(opa.value), Number(prio.value), modeSel.value, Number(lodprio.value))); else if(s.type==='indicator') manager.register(createEMAItem(s.seriesId, s.period||20, s.tf||60, colorInp.value, Number(opa.value), Number(prio.value), modeSel.value, Number(lodprio.value))); } saveLayoutDebounced(); renderItemsList(); addModalRoot.innerHTML=''; };
+
+  backfillBtn.onclick = ()=>{ const sels=Array.from(list.querySelectorAll('.list-item.selected')).map(el=>JSON.parse(el.dataset.series)); if(!sels.length){ alert('select at least one'); return; } const end=Math.floor(Date.now()/1000); const start=end - 24*3600; for(const s of sels){ if(s.type==='indicator'){ const reqId = dataLayer.startBackfill(s.name||'ema', s.tf||60, s.period||20, start, end, { chunkSec: s.tf*400 }); monitorBackfill(reqId, s); } } };
+}
+
+/* Floating controls placeholder */
+let floatingEl=null;
+function showFloatingControls(targetRow, it){
+  hideFloatingControls();
+  floatingEl = document.createElement('div'); floatingEl.className='tooltip'; floatingEl.style.left = (targetRow.getBoundingClientRect().right + 6) + 'px';
+  floatingEl.style.top = (targetRow.getBoundingClientRect().top) + 'px';
+  floatingEl.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${it.id}</div>
+    <div style="display:flex;gap:6px"><button class="btn" id="btn-hide">hide</button><button class="btn ghost" id="btn-focus">focus</button></div>`;
+  document.body.appendChild(floatingEl);
+  document.getElementById('btn-hide').onclick = ()=>{ manager.setVisible(it.id, false); saveLayoutDebounced(); renderItemsList(); hideFloatingControls(); };
+  document.getElementById('btn-focus').onclick = ()=>{ chart.timeScale().fitContent(); hideFloatingControls(); };
+}
+function hideFloatingControls(){ if(floatingEl){ floatingEl.remove(); floatingEl=null; } }
+
+/* Coverage tooltip (simple) */
+let tooltipEl=null;
+function showCoverageTooltip(evt, cov, item){
+  hideTooltip();
+  tooltipEl = document.createElement('div'); tooltipEl.className='tooltip';
+  tooltipEl.style.left = (evt.pageX + 8) + 'px'; tooltipEl.style.top = (evt.pageY + 8) + 'px';
+  tooltipEl.innerHTML = `<div style="font-weight:700">Coverage: ${cov.status} • ${cov.coveragePercent||0}%</div>`;
+  document.body.appendChild(tooltipEl);
+}
+function hideTooltip(){ if(tooltipEl){ tooltipEl.remove(); tooltipEl=null; } }
+
+/* Backfill monitoring UI & logic */
+function monitorBackfill(reqId, seriesMeta){
+  renderBackfillPanel();
+}
+function renderBackfillPanel(){
+  backfillListEl.innerHTML='';
+  const map = Array.from(dataLayer.backfillTasks.entries());
+  for(const [reqId, task] of map){
+    const container = document.createElement('div'); container.style.marginBottom='8px';
+    const title = document.createElement('div'); title.style.fontWeight='700'; title.textContent = `${reqId} • ${task.meta} • ${task.progress||0}% • ${task.status||'running'}`; container.appendChild(title);
+    const chunkWrap = document.createElement('div');
+    task.chunks.forEach((ch, idx)=>{
+      const row = document.createElement('div'); row.className='list-chunk ' + (ch.status||'pending'); row.dataset.reqId = reqId; row.dataset.idx = idx;
+      const left = document.createElement('div'); left.innerHTML = `${new Date(ch.start*1000).toLocaleString()} → ${new Date(ch.end*1000).toLocaleString()}`; row.appendChild(left);
+      const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px'; right.style.alignItems='center';
+      const chk = document.createElement('input'); chk.type='checkbox'; chk.className='chunk-select'; chk.dataset.reqId=reqId; chk.dataset.idx=idx;
+      if(ch.status !== 'failed') chk.disabled = true;
+      right.appendChild(chk);
+      const btn = document.createElement('button'); btn.className='btn ghost'; btn.textContent = ch.status==='done' ? 'OK' : (ch.status==='failed' ? 'Failed' : 'Pending');
+      right.appendChild(btn);
+      row.appendChild(right);
+      chunkWrap.appendChild(row);
+    });
+    container.appendChild(chunkWrap);
+    backfillListEl.appendChild(container);
+  }
+}
+document.getElementById('btn-open-backfill-panel').onclick = ()=>{ backfillPanel.style.display = backfillPanel.style.display === 'none' ? 'block' : 'none'; renderBackfillPanel(); };
+document.getElementById('btn-retry-selected-chunks').onclick = ()=>{
+  const checks = Array.from(document.querySelectorAll('#backfill-panel .chunk-select')).filter(c=>c.checked && !c.disabled);
+  if(!checks.length){ alert('没有选中的失败 chunk'); return; }
+  const byReq = {};
+  for(const c of checks){ const rid = c.dataset.reqId; byReq[rid] = byReq[rid] || []; byReq[rid].push(Number(c.dataset.idx)); }
+  for(const [origReq, idxs] of Object.entries(byReq)){
+    const retryId = dataLayer.retryBackfillChunks(origReq, idxs);
+    const log = document.getElementById('backfill-log'); const p = document.createElement('div'); p.textContent = `Retry created ${retryId} for ${origReq} (chunks ${idxs.join(',')})`; log.appendChild(p);
+    setTimeout(()=>renderBackfillPanel(), 300);
+  }
+};
+document.getElementById('btn-cancel-selected-chunks').onclick = ()=>{
+  const checks = Array.from(document.querySelectorAll('#backfill-panel .chunk-select')).filter(c=>c.checked);
+  for(const c of checks){
+    const rid = c.dataset.reqId; const idx = Number(c.dataset.idx);
+    const task = dataLayer.backfillTasks.get(rid);
+    if(task && task.chunks && task.chunks[idx]) task.chunks[idx].status = 'cancelled';
+  }
+  renderBackfillPanel();
+};
+
+/* polling to update backfill panel & dataLayer tasks */
+setInterval(()=>{ if(backfillPanel.style.display !== 'none') renderBackfillPanel(); }, 600);
+
+/* Density toggle and LOD selection wiring */
+densityToggle.onclick = ()=>{
+  manager.densityMode = manager.densityMode === 'auto' ? 'on' : (manager.densityMode === 'on' ? 'off' : 'auto');
+  densityToggle.textContent = `Density: ${manager.densityMode}`;
+  manager.requestUpdate();
+};
+lodModeSelect.onchange = (e)=>{ manager.lodMode = e.target.value; manager.requestUpdate(); };
+
+/* save/restore layout */
+function saveLayoutDebounced(){
+  clearTimeout(saveLayoutDebounced._t);
+  saveLayoutDebounced._t = setTimeout(()=>{ const cfg = manager.items.map(i=>i.serialize?i.serialize():null).filter(Boolean); localStorage.setItem('u_framework_layout', JSON.stringify(cfg)); }, 500);
+}
+
+/* initial demo: add a few items */
+manager.register(createHTFItem('kline_5m', 300, '#ff6b00', 0.14, 80, 'overlay', 80));
+manager.register(createEMAItem('ema_5m_20', 20, 300, '#0066ff', 1, 200, 'overlay', 200));
+manager.register(createEMAItem('ema_1m_20', 20, 60, '#00aa66', 0.9, 190, 'overlay', 180));
+renderItemsList();
+
+/* streaming simulation */
+setInterval(()=>{
+  const last = window.baseBars[window.baseBars.length-1];
+  const t = last.time + 60;
+  const open = last.close; const high = open + Math.random()*2; const low = open - Math.random()*2; const close = low + Math.random()*(high-low);
+  const nb = { time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2), volume: Math.round(100+Math.random()*700) };
+  window.baseBars.push(nb);
+  try{ mainSeries.update({ time:nb.time, open:nb.open, high:nb.high, low:nb.low, close:nb.close }); }catch(e){}
+  dataLayer.pushBaseBars([nb]);
+  manager.requestUpdate();
+}, 3000);
+
+/* expose debug object */
+window.__VFRAME = { dataLayer, manager, createHTFItem, createEMAItem, offscreenPool };
+
+/* periodic UI updates */
+setInterval(()=>{ if(document.getElementById('backfill-panel').style.display !== 'none') renderBackfillPanel(); }, 800);
+chart.timeScale().subscribeVisibleTimeRangeChange(()=>{ renderItemsList(); });
+
+</script>
+</body>
+</html>

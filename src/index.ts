@@ -38,6 +38,8 @@ export { createImageWatermark } from './plugins/image-watermark/primitive';
 export { createSeriesMarkers } from './plugins/series-markers/wrapper';
 export { createUpDownMarkers } from './plugins/up-down-markers-plugin/wrapper';
 
+/* eslint-disable-next-line spaced-comment */
+/*__DRAWING_EXPORTS__*/
 /**
  * Returns the current version as a string. For example `'3.3.0'`.
  */

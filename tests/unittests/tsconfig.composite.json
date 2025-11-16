@@ -2,7 +2,9 @@
 	"extends": "../../tsconfig.composite.base.json",
 	"compilerOptions": {
 		"module": "ESNext",
-		"types": ["node"]
+		"types": ["node"],
+		"noUnusedLocals": false,
+		"noUnusedParameters": false
 	},
 	"references": [
 		{ "path": "../../src/tsconfig.composite.json" }

@@ -6,6 +6,17 @@ import { fileURLToPath } from 'node:url';
 
 import { serveLocalFiles } from './serve-local-files';
 
+interface TestFailEvent {
+	file: string;
+	name: string;
+	details: { error: unknown; duration_ms: number };
+}
+
+interface TestStderrEvent {
+	file: string;
+	message: string;
+}
+
 export interface FileToServe {
 	/** Name for the file when hosted on the localhost server */
 	name: string;
@@ -13,6 +24,23 @@ export interface FileToServe {
 	filePath: string;
 	/** ENV var name to assign with the value of the hosted address for this file */
 	envVar?: string;
+}
+
+function formatUnknownError(error: unknown): string {
+	if (error instanceof Error) {
+		if (typeof error.stack === 'string' && error.stack.length > 0) {
+			return error.stack;
+		}
+		if (typeof error.message === 'string' && error.message.length > 0) {
+			return error.message;
+		}
+		return error.name;
+	}
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
 }
 
 export async function runTests(
@@ -61,19 +89,18 @@ export async function runTests(
 
 	const summary: string[] = [];
 
-	testStream.on('test:fail', (data: TestFail) => {
+	testStream.on('test:fail', (data: TestFailEvent) => {
 		exitCode = 1;
-		const error = data.details.error;
+		const message = formatUnknownError(data.details.error);
 
 		summary.push(
 			`${data.file} - "${data.name}" (${Math.round(
 				data.details.duration_ms
-			// eslint-disable-next-line @typescript-eslint/no-base-to-string
-			)}ms)\n${error.toString()} `
+			)}ms)\n${message} `
 		);
 	});
 
-	testStream.on('test:stderr', (data: TestStderr) => {
+	testStream.on('test:stderr', (data: TestStderrEvent) => {
 		summary.push(`${data.file} - Error:\n${data.message} `);
 	});
 

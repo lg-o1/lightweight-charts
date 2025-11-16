@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "toolId": "series-markers-shadow",
+  "featureFlag": "drawingTools.seriesMarkersShadow",
+  "description": "Shadow implementation of series markers (char/shape/text) as a collection-based overlay, used for validating the generator/TDS.",
+  "anchors": [
+    {
+      "id": "point",
+      "type": "price-time",
+      "description": "Marker point with price/time anchor"
+    }
+  ],
+  "states": [
+    "idle"
+  ],
+  "handles": [],
+  "views": {
+    "pane": {
+      "renderer": "marker-set",
+      "zOrder": "top",
+      "supportsPreview": false
+    }
+  },
+  "serialization": {
+    "version": 1,
+    "snapshot": [
+      "options"
+    ]
+  },
+  "options": [
+    {
+      "name": "shape",
+      "type": "enum(circle|square|arrowUp|arrowDown)",
+      "default": "circle"
+    },
+    {
+      "name": "text",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "color",
+      "type": "color",
+      "default": "#1f78b4"
+    },
+    {
+      "name": "size",
+      "type": "number",
+      "default": 1
+    },
+    {
+      "name": "position",
+      "type": "enum(aboveBar|belowBar|inBar|atPriceTop|atPriceBottom|atPriceMiddle)",
+      "default": "inBar"
+    }
+  ],
+  "testing": {
+    "unit": [
+      "spec metadata"
+    ],
+    "e2e": [
+      "hoveredObjectId propagation",
+      "zOrder precedence vs built-ins"
+    ],
+    "performance": {
+      "maxInstances": 500,
+      "targetFps": 60
+    }
+  }
+}

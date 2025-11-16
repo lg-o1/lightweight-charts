@@ -1,0 +1,33 @@
+﻿[
+  {
+    "toolId": "multiRect",
+    "featureFlag": "drawingTools.multiRect",
+    "anchors": [
+      { "id": "start", "type": "price-time" },
+      { "id": "end", "type": "price-time" }
+    ],
+    "states": ["idle", "completed"],
+    "handles": [
+      { "id": "corner", "type": "corner", "cursor": "default" }
+    ],
+    "views": {
+      "pane": { "renderer": "dummy", "zOrder": "normal" }
+    }
+  },
+  {
+    "toolId": "multiEllipse",
+    "featureFlag": "drawingTools.multiEllipse",
+    "anchors": [
+      { "id": "center", "type": "price-time" },
+      { "id": "radius", "type": "price-time" }
+    ],
+    "states": ["idle", "preview", "completed"],
+    "handles": [
+      { "id": "edge", "type": "edge", "cursor": "ew-resize" }
+    ],
+    "views": {
+      "pane": { "renderer": "dummy", "zOrder": "normal" }
+    }
+  }
+]
+

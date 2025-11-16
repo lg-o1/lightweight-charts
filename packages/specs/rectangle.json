@@ -1,0 +1,127 @@
+{
+	"toolId": "rectangle",
+	"featureFlag": "drawingTools.rectangle",
+	"description": "Price/time anchored rectangle drawing tool with four corner handles and axis labels.",
+	"anchors": [
+		{
+			"id": "start",
+			"type": "price-time",
+			"description": "First corner anchor defined by price/time."
+		},
+		{
+			"id": "end",
+			"type": "price-time",
+			"description": "Opposite corner anchor defined by price/time."
+		}
+	],
+	"states": [
+		"idle",
+		"anchoring",
+		"preview",
+		"editing",
+		"completed"
+	],
+	"handles": [
+		{
+			"id": "topLeft",
+			"type": "corner",
+			"cursor": "nwse-resize"
+		},
+		{
+			"id": "topRight",
+			"type": "corner",
+			"cursor": "nesw-resize"
+		},
+		{
+			"id": "bottomLeft",
+			"type": "corner",
+			"cursor": "nesw-resize"
+		},
+		{
+			"id": "bottomRight",
+			"type": "corner",
+			"cursor": "nwse-resize"
+		}
+	],
+	"views": {
+		"pane": {
+			"renderer": "rectangle-fill",
+			"zOrder": "normal",
+			"supportsPreview": true
+		},
+		"handles": {
+			"renderer": "square-handle",
+			"zOrder": "top"
+		},
+		"timeAxis": {
+			"labels": [
+				{ "anchor": "start" },
+				{ "anchor": "end" }
+			]
+		},
+		"priceAxis": {
+			"labels": [
+				{ "anchor": "start" },
+				{ "anchor": "end" }
+			]
+		}
+	},
+	"autoscale": {
+		"mode": "vertical-bounds",
+		"padding": 0
+	},
+	"serialization": {
+		"version": 1,
+		"snapshot": [
+			"anchors.start",
+			"anchors.end",
+			"options"
+		]
+	},
+	"options": [
+		{
+			"name": "fillColor",
+			"type": "color",
+			"default": "rgba(200, 50, 100, 0.75)"
+		},
+		{
+			"name": "previewFillColor",
+			"type": "color",
+			"default": "rgba(200, 50, 100, 0.25)"
+		},
+		{
+			"name": "labelColor",
+			"type": "color",
+			"default": "rgba(200, 50, 100, 1)"
+		},
+		{
+			"name": "labelTextColor",
+			"type": "color",
+			"default": "#ffffff"
+		},
+		{
+			"name": "showLabels",
+			"type": "boolean",
+			"default": true
+		}
+	],
+	"testing": {
+		"unit": [
+			"geometry normalization",
+			"state machine transitions",
+			"handles movement",
+			"autoscale info",
+			"serialization round-trip"
+		],
+		"e2e": [
+			"add-preview-complete",
+			"handle-drag-edit",
+			"delete-undo-redo",
+			"autoscale verification"
+		],
+		"performance": {
+			"maxInstances": 200,
+			"targetFps": 60
+		}
+	}
+}

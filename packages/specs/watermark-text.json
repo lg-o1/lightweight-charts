@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "toolId": "watermark-text-shadow",
+  "featureFlag": "drawingTools.watermarkTextShadow",
+  "description": "Shadow implementation of text watermark as a pane-primitive on background layer for validating generator/TDS.",
+  "anchors": [
+    {
+      "id": "pane",
+      "type": "pane",
+      "description": "Pane-level background watermark not anchored to price/time"
+    }
+  ],
+  "states": [
+    "idle"
+  ],
+  "handles": [],
+  "views": {
+    "pane": {
+      "renderer": "text-watermark",
+      "zOrder": "background",
+      "supportsPreview": false
+    }
+  },
+  "serialization": {
+    "version": 1,
+    "snapshot": [
+      "options"
+    ]
+  },
+  "options": [
+    {
+      "name": "text",
+      "type": "string",
+      "default": "WATERMARK"
+    },
+    {
+      "name": "color",
+      "type": "color",
+      "default": "rgba(170, 170, 170, 0.25)"
+    },
+    {
+      "name": "fontSize",
+      "type": "number",
+      "default": 48
+    },
+    {
+      "name": "horzAlign",
+      "type": "enum(left|center|right)",
+      "default": "center"
+    },
+    {
+      "name": "vertAlign",
+      "type": "enum(top|center|bottom)",
+      "default": "center"
+    },
+    {
+      "name": "rotation",
+      "type": "number",
+      "default": 0
+    }
+  ],
+  "testing": {
+    "unit": [
+      "spec metadata"
+    ],
+    "e2e": [
+      "renders on background layer",
+      "does not affect autoscale"
+    ],
+    "performance": {
+      "maxInstances": 1,
+      "targetFps": 60
+    }
+  }
+}

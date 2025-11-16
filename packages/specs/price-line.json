@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "toolId": "price-line-shadow",
+  "featureFlag": "drawingTools.priceLineShadow",
+  "description": "Shadow implementation of price line as a pane-primitive anchored to price, used to validate generator/TDS and axis label rendering.",
+  "anchors": [
+    {
+      "id": "price",
+      "type": "price",
+      "description": "Horizontal line anchored to a fixed price"
+    }
+  ],
+  "states": [
+    "idle"
+  ],
+  "handles": [],
+  "views": {
+    "pane": {
+      "renderer": "price-line",
+      "zOrder": "normal",
+      "supportsPreview": false
+    },
+    "priceAxis": {
+      "labels": [
+        { "anchor": "price" }
+      ]
+    }
+  },
+  "serialization": {
+    "version": 1,
+    "snapshot": [
+      "anchors.price",
+      "options"
+    ]
+  },
+  "options": [
+    {
+      "name": "color",
+      "type": "color",
+      "default": "#2962FF"
+    },
+    {
+      "name": "lineStyle",
+      "type": "enum(solid|dashed|dotted)",
+      "default": "solid"
+    },
+    {
+      "name": "lineWidth",
+      "type": "number",
+      "default": 1
+    },
+    {
+      "name": "opacity",
+      "type": "number",
+      "default": 1
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "axisLabelVisible",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "name": "axisLabelColor",
+      "type": "color",
+      "default": "#2962FF"
+    },
+    {
+      "name": "axisLabelBackground",
+      "type": "color",
+      "default": "rgba(255, 255, 255, 0.8)"
+    },
+    {
+      "name": "extendToLeft",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "name": "extendToRight",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "testing": {
+    "unit": [
+      "spec metadata"
+    ],
+    "e2e": [
+      "renders on pane",
+      "shows price axis label",
+      "does not affect autoscale"
+    ],
+    "performance": {
+      "maxInstances": 10,
+      "targetFps": 60
+    }
+  }
+}

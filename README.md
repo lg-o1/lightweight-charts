@@ -119,3 +119,15 @@ You can use the [`attributionLogo`](https://tradingview.github.io/lightweight-ch
 [bundle-size-img]: https://badgen.net/bundlephobia/minzip/lightweight-charts
 [deps-count-img]: https://img.shields.io/badge/dynamic/json.svg?label=dependecies&color=brightgreen&query=$.dependencyCount&uri=https%3A%2F%2Fbundlephobia.com%2Fapi%2Fsize%3Fpackage%3Dlightweight-charts
 [bundle-size-link]: https://bundlephobia.com/result?p=lightweight-charts
+
+# Lightweight Charts (Customized Fork)
+
+> 本仓库聚焦在 TradingView Lightweight Charts 的绘图能力扩展，新增了分阶段 Roadmap、Wave0 设计文档、Gap 分析等资料，以便在插件生态基础上逐步补齐核心绘图工具。
+
+## 文档索引
+- `waves.plan.md`：绘图能力分波次规划（Wave0–Wave5）。
+- `waves.wave1-spec-plan.md`：Wave1 详细实施计划。
+- `docs/drawing-tools/wave0-design.md`：Wave0 基座与矩形工具设计。
+- `docs/drawing-tools/gap-analysis.md`：TradingView vs Lightweight Charts 功能差距。
+
+上述文档伴随着各 Wave 的进展持续维护。

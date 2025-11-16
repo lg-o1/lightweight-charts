@@ -49,6 +49,9 @@ function getConfig(inputFile, { format, isProd, isStandalone }) {
 					// make sure that this values are synced with src/typings/globals/index.d.ts
 					'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
 					'process.env.BUILD_VERSION': JSON.stringify(currentVersion),
+					'/*__DRAWING_EXPORTS__*/': process.env.LWC_SIZE_LIMIT_MODE === 'flags-on'
+						? 'export { RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec } from "./drawing/tools/rectangle.js";'
+						: '',
 				},
 			}),
 			isProd && terser({

@@ -65,6 +65,14 @@ module.exports = {
 		ecmaVersion: 2020,
 		sourceType: 'module',
 	},
+	ignorePatterns: [
+		'website/**',
+		'src/drawing/tools/__generated__/**',
+		'src/drawing/runtime/__generated__/**',
+		'docs/drawing-tools/__generated__/**',
+		'tests/unittests/drawing/__generated__/**',
+		'src/drawing/__tests__/**',
+	],
 	overrides: [
 		{
 			// rules specific for js files only
@@ -489,6 +497,66 @@ module.exports = {
 				// d.ts files are mostly read by computers (to generate docs, provide intellisense, etc.)
 				// so consistent quote characaters aren't important.
 				'@typescript-eslint/quotes': 'off',
+			},
+		},
+		{
+			files: ['src/**/*.ts', 'src/**/*.tsx'],
+			// allow entry wrappers and tests to import __generated__
+			excludedFiles: ['src/drawing/tools/**', '**/__generated__/**', 'tests/**'],
+			rules: {
+				// Core ESLint rule to forbid importing generated artifacts in production code
+				'no-restricted-imports': ['error', {
+					patterns: ['**/__generated__/**'],
+				}],
+			},
+		},
+		{
+			files: ['tests/**/*.ts', 'tests/**/*.tsx'],
+			rules: {
+				'@typescript-eslint/tslint/config': 'off',
+				'@typescript-eslint/no-floating-promises': 'off',
+				'@typescript-eslint/naming-convention': 'off',
+				'@typescript-eslint/no-explicit-any': 'off',
+				'@typescript-eslint/no-unsafe-argument': 'off',
+				'@typescript-eslint/no-unsafe-member-access': 'off',
+				'@typescript-eslint/no-unsafe-call': 'off',
+				'@typescript-eslint/no-unsafe-return': 'off',
+				'@typescript-eslint/ban-types': 'off',
+				'prefer-arrow/prefer-arrow-functions': 'off',
+				'no-restricted-syntax': 'off',
+				'no-empty': 'off',
+				'eol-last': 'off',
+			},
+		},
+		{
+			files: ['src/drawing/**/*.ts'],
+			rules: {
+				'@typescript-eslint/tslint/config': 'off',
+				'@typescript-eslint/member-ordering': 'off',
+				'@typescript-eslint/no-non-null-assertion': 'off',
+				'@typescript-eslint/no-unnecessary-type-assertion': 'off',
+				'@typescript-eslint/consistent-type-assertions': 'off',
+				'@typescript-eslint/no-explicit-any': 'off',
+				'@typescript-eslint/no-unsafe-member-access': 'off',
+				'@typescript-eslint/no-unsafe-call': 'off',
+				'@typescript-eslint/no-unsafe-argument': 'off',
+				'@typescript-eslint/no-unsafe-return': 'off',
+				'@typescript-eslint/explicit-member-accessibility': 'off',
+				'unicorn/filename-case': 'off',
+				'tsdoc/syntax': 'off',
+				'no-multiple-empty-lines': 'off',
+				'eol-last': 'off',
+				'@typescript-eslint/naming-convention': [
+					'error',
+					{ selector: 'default', format: ['camelCase'] },
+					{ selector: 'variable', format: ['camelCase', 'UPPER_CASE'] },
+					{ selector: 'typeLike', format: ['PascalCase'] },
+					{ selector: 'enumMember', format: ['PascalCase'] },
+					{ selector: 'memberLike', modifiers: ['private'], format: ['camelCase'], leadingUnderscore: 'allow' },
+					{ selector: 'memberLike', modifiers: ['protected'], format: ['camelCase'], leadingUnderscore: 'allow' },
+					{ selector: 'parameter', format: ['camelCase'], leadingUnderscore: 'allow' },
+				],
+				'max-params': ['error', { max: 8 }],
 			},
 		},
 	],

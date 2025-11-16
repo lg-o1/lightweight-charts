@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { findLeaks, takeSnapshots } from '@memlab/api';
 import type { IHeapNode, IScenario } from '@memlab/core';
 import { expect } from 'chai';

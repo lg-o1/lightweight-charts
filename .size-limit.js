@@ -2,13 +2,12 @@
 
 /**
  * @type {import('size-limit').SizeLimitConfig}
-*/
-// eslint-disable-next-line import/no-default-export
-export default [
+ */
+const base = [
 	{
 		name: 'ESM',
 		path: 'dist/lightweight-charts.production.mjs',
-		limit: '49.50 KB',
+		limit: '49.64 KB',
 		import: '*',
 		ignore: ['fancy-canvas'],
 		brotli: true,
@@ -48,14 +47,14 @@ export default [
 	{
 		name: 'Standalone-ESM',
 		path: 'dist/lightweight-charts.standalone.production.mjs',
-		limit: '51.00 KB',
+		limit: '51.17 KB',
 		import: '*',
 		brotli: true,
 	},
 	{
 		name: 'Standalone',
 		path: 'dist/lightweight-charts.standalone.production.js',
-		limit: '51.00 KB',
+		limit: '51.08 KB',
 		brotli: true,
 	},
 	{
@@ -63,7 +62,7 @@ export default [
 		path: 'dist/lightweight-charts.production.mjs',
 		import: '{ createTextWatermark }',
 		ignore: ['fancy-canvas'],
-		limit: '2.00 KB',
+		limit: '2.10 KB',
 		brotli: true,
 	},
 	{
@@ -79,7 +78,7 @@ export default [
 		path: 'dist/lightweight-charts.production.mjs',
 		import: '{ createSeriesMarkers }',
 		ignore: ['fancy-canvas'],
-		limit: '4.5 KB',
+		limit: '4.60 KB',
 		brotli: true,
 	},
 	{
@@ -87,7 +86,7 @@ export default [
 		path: 'dist/lightweight-charts.production.mjs',
 		import: '{ LineSeries }',
 		ignore: ['fancy-canvas'],
-		limit: '2.8 KB',
+		limit: '2.90 KB',
 		brotli: true,
 	},
 	{
@@ -135,6 +134,28 @@ export default [
 		path: 'dist/lightweight-charts.production.mjs',
 		import: '{ createUpDownMarkers }',
 		ignore: ['fancy-canvas'],
-		limit: '2.50 KB',
+		limit: '2.61 KB',
 	},
 ];
+
+const mode = process.env.LWC_SIZE_LIMIT_MODE;
+
+/** @type {import('size-limit').SizeLimitConfig} */
+let config = base;
+if (mode === 'flags-off') {
+	config = base;
+} else if (mode === 'flags-on') {
+	config = base.concat([
+		{
+			name: 'Drawing Tools: Rectangle',
+			path: 'dist/lightweight-charts.production.mjs',
+			import: '{ RectangleDrawingTool }',
+			ignore: ['fancy-canvas'],
+			limit: '12.00 KB',
+			brotli: true,
+		},
+	]);
+}
+
+// eslint-disable-next-line import/no-default-export
+export default config;
