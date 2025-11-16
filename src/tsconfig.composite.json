@@ -1,7 +1,6 @@
 {
 	"extends": "../tsconfig.composite.base.json",
 	"references": [
-		{ "path": "./api/tsconfig.composite.json" },
 		{ "path": "./formatters/tsconfig.composite.json" },
 		{ "path": "./gui/tsconfig.composite.json" },
 		{ "path": "./helpers/tsconfig.composite.json" },
@@ -12,6 +11,7 @@
 		"./index.ts",
 		"./standalone.ts",
 		"./feature-flags.ts",
+		"./api/**/*.ts",
 		"./drawing/**/*.ts",
 		"./drawing/**/*.d.ts"
 	],
