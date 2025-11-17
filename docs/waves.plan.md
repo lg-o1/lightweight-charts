@@ -1,8 +1,16 @@
-﻿# Lightweight Charts 绘图能力 Roadmap
+# Lightweight Charts 绘图能力 Roadmap
 
 > 目标：在保持核心库轻量、稳定的前提下，分波次引入用户最常用的绘图与注释工具，实现从基础形状到高级测量工具的完整覆盖，同时保证生成链、测试、文档、性能、可维护性全面达标。
 >
 > **提交原则**：所有新绘图工具必须先定义 Tool Definition Schema（TDS），再运行 `npm run drawing-tools:generate` 生成代码，并通过 `npm run drawing-tools:generate --check` 校验，禁止直接手写或修改 `src/drawing/**/__generated__`。
+
+> 重要更新（2025-11）
+>
+> - 已移除 Feature Flags 的构建/运行时门禁，绘图工具默认开启、始终导出。兼容性 API 仍保留但均为 no-op，详见 [feature-flags.ts](lightweight-charts/src/feature-flags.ts:1)（例如 [isEnabled()](lightweight-charts/src/feature-flags.ts:6)、[setFeatureFlags()](lightweight-charts/src/feature-flags.ts:19)、[ensureFeatureFlagEnabled()](lightweight-charts/src/feature-flags.ts:15) 均恒为“允许”）。
+> - Rollup 始终注入绘图导出（无需任何环境变量），见 [rollup.config.js](lightweight-charts/rollup.config.js:56)。
+> - 文档中提到的“flags-off/flags-on 体积基线、dot-key 开关”等均为历史内容。现统一使用单一 size-limit 与完整 E2E/内存/性能基线；旧的 flags-off 用例已更新为“默认包应包含绘图导出”，参见 [bundle-flags-off.spec.ts](lightweight-charts/tests/unittests/drawing/bundle-flags-off.spec.ts:6) 与 [feature-flags.spec.ts](lightweight-charts/tests/unittests/drawing/feature-flags.spec.ts:11)。
+> - Demo 与示例无需再调用 `setFeatureFlags`/`ensureFeatureFlagEnabled`；若残留调用，它们为 no-op，不影响行为，后续可逐步删除以简化脚本。
+> - E2E/验收不再区分 flags-off/on，统一验证：Add → Preview → Complete → Handle Drag → Body Drag → Delete → Undo/Redo → Autoscale（BusinessDay/UTCTimestamp）与 attach/detach 内存回收。
 
 ## 1. 总体策略
 

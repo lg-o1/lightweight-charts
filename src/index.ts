@@ -39,7 +39,9 @@ export { createSeriesMarkers } from './plugins/series-markers/wrapper';
 export { createUpDownMarkers } from './plugins/up-down-markers-plugin/wrapper';
 
 /* eslint-disable-next-line spaced-comment */
-/*__DRAWING_EXPORTS__*/
+// Drawing tools exports (always-on in Wave0)
+export { RectangleDrawingPrimitive, RectangleDrawingTool } from './drawing/tools/rectangle';
+export { rectangleSpec } from './drawing/tools/__generated__/rectangle';
 /**
  * Returns the current version as a string. For example `'3.3.0'`.
  */

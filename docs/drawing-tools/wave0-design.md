@@ -4,13 +4,13 @@
 一、设计原则
 - 统一抽象：基于 DrawingPrimitiveBase、StateMachine、HandlesController、Views 分层（pane、axis、axis-pane），避免耦合系列数据与价格轴。
 - 生成链（TDS）：以 Tool Definition Schema 为单一事实来源，生成 __generated__ 元数据与测试模板，手写实现仅在非 __generated__ 层。
-- 特性开关：主开关 drawingTools 与子开关 drawingTools.rectangle 控制暴露与构造，保证 Beta 可控。
+- 绘图工具默认开启、始终导出；兼容性 API 为 no-op（详见 src/feature-flags.ts），无需任何 Feature Flag。
 - 性能与内存：坐标变换缓存、requestUpdate 合并与 RAF 调度；多实例与长拖拽性能基线纳入 CI。
 - 兼容与演进：影子入口类稳定导出，内核实现置于单独文件，避免未来合并冲突。
 
 二、TDS 规范（Rectangle）
 - toolId：rectangle
-- featureFlag：drawingTools.rectangle
+
 - anchors：start、end（price-time）
 - states：idle、anchoring、preview、editing、completed
 - handles：四角句柄（topLeft、topRight、bottomLeft、bottomRight）
@@ -136,7 +136,7 @@
   - 本设计文档位于 docs/drawing-tools/wave0-design.md，与 Roadmap 对齐。
   - 官网 website/docs 增加“矩形工具”页面与使用教程。
 - 示例：
-  - 在 lightweight-charts-demo/v0 新增 demo-annotations 页面，演示 add/preview/edit/delete/undo/redo。
+  - 在 lightweight-charts/demos 新增 demo-annotations 页面，演示 add/preview/edit/delete/undo/redo。
 - gap 分析：
   - 维护 docs/drawing-tools/gap-analysis.md，与 TradingView 绘图能力对照更新进度。
 

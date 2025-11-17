@@ -1,83 +1,89 @@
-# Wave0 Feature Flags 接线与按需打包草案
+# Drawing Tools Feature Flags — Deprecated and Always On
 
-概述
-- 目标：在 Feature Flag 关闭时不导出、不被打包；在开启时可按需暴露能力，避免影响默认体积与兼容性。
-- 范围：公共入口、生成产物入口、打包与 size 限制校验。
-- 当前选择“并行推进”：不改变现有公共导出，仅落地导出侧零引用策略与 size-limit 双基线脚本骨架。
+Summary
 
-相关文件
-- 公共入口：[src/index.ts](../../src/index.ts)
-- 独立构建入口（浏览器 UMD/Standalone）：[src/standalone.ts](../../src/standalone.ts)
-- Feature Flags 定义与工具：[src/feature-flags.ts](../../src/feature-flags.ts)
-- Drawing Tool 稳定包装入口（手写）：[src/drawing/tools/rectangle.ts](../../src/drawing/tools/rectangle.ts)
-- Drawing Tool 生成产物（只允许写入此处）：[src/drawing/tools/__generated__/rectangle.ts](../../src/drawing/tools/__generated__/rectangle.ts)
-- 体积基线配置： [.size-limit.js](../../.size-limit.js)
-- 脚本配置： [package.json](../../package.json)
+- Feature flags for Drawing Tools have been removed at build-time and at runtime. Drawing tools are always exported and always enabled.
+- Backward-compat API remains for compatibility: [isEnabled()](lightweight-charts/src/feature-flags.ts:6), [requireEnabled()](lightweight-charts/src/feature-flags.ts:11), [ensureFeatureFlagEnabled()](lightweight-charts/src/feature-flags.ts:15), [setFeatureFlags()](lightweight-charts/src/feature-flags.ts:19), [getFeatureFlag()](lightweight-charts/src/feature-flags.ts:23), [allFlags()](lightweight-charts/src/feature-flags.ts:28), [resetFeatureFlags()](lightweight-charts/src/feature-flags.ts:37) are now no-ops and always report enabled.
+- Bundles always include drawing exports. See rollup injection in [rollup.config.js](lightweight-charts/rollup.config.js:56) and the verification unit test [bundle-flags-off.spec.ts](lightweight-charts/tests/unittests/drawing/bundle-flags-off.spec.ts:6), which now asserts the default bundle contains Rectangle exports.
+- Demos and E2E no longer require toggling any flag. If a demo still calls [setFeatureFlags()](lightweight-charts/src/feature-flags.ts:19), it is a harmless no-op and can be removed later.
 
-设计原则
-- 公共入口不静态引用任何 Drawing Tools。保持零引用意味着在 Flag 关闭时实现“零导出/零打包”。
-- 生成器仅写入 __generated__ 目录；稳定包装入口由手写维护并打上 “@generated-entry” 标记。
-- 将来若需要对外暴露 Drawing Tools，采用独立的二级入口路径避免污染默认入口，保证 tree-shaking 可裁剪。
-- 运行时 Flag 仅作为“最后防线”（阻止误用），真正的“未开不打包”依赖构建期零引用与 tree-shaking。
+Why this change
 
-导出接线方案（草案）
-1) 保持现状：不在 [src/index.ts](../../src/index.ts) 增加任何 Drawing Tools 的导出。
-2) 生成器产物只经由稳定包装入口暴露：例如 [src/drawing/tools/rectangle.ts](../../src/drawing/tools/rectangle.ts)，其内部再转发到 [src/drawing/tools/__generated__/rectangle.ts](../../src/drawing/tools/__generated__/rectangle.ts)。
-3) 未来新增“按需入口”（计划中，暂不启用）：提供一个二级入口路径（例如 lightweight-charts/drawing-tools），仅在需要时由应用显式导入，从而维持默认包的零引用。
-4) 二级入口内部将基于 Feature Flag 决定暴露哪些包装入口，但不会在默认入口产生任何静态 import。
+- Real-world incidents were traced to mismatches between build modes and feature flags. Removing gates eliminates a class of configuration errors across CLI/TDS, demos, and E2E.
+- We keep a thin compatibility shim to avoid breaking external code that might still import the feature flag helpers.
 
-构建与打包策略
-- 保持 [src/index.ts](../../src/index.ts) 与 [src/standalone.ts](../../src/standalone.ts) 不引用 Drawing Tools。
-- 生成产物与包装入口的存在不影响默认构建，只要没有从公共入口导入，它们不会进入产物。
-- 运行时对 Flag 的检查已由生成产物负责（构造/attach 时进行断言），用于防止误用；但这不会引入到默认包中，因为默认包没有引用这些模块。
+Compatibility and behavior
 
-size-limit 双基线（脚本骨架）
-- 在 [.size-limit.js](../../.size-limit.js) 中加入模式开关，支持通过环境变量区分 flags-off 与 flags-on 模式。
-- 在 [package.json](../../package.json) 中新增脚本：size-limit:flags-off 与 size-limit:flags-on。
-- 目前两个模式均复用基础场景；待公共按需入口接线完成后，将在 flags-on 模式追加对二级入口的体积校验项。
+- Always enabled: [isEnabled()](lightweight-charts/src/feature-flags.ts:6) and [getFeatureFlag()](lightweight-charts/src/feature-flags.ts:23) return true for any name.
+- No runtime guards: [requireEnabled()](lightweight-charts/src/feature-flags.ts:11) and [ensureFeatureFlagEnabled()](lightweight-charts/src/feature-flags.ts:15) never throw.
+- No-op configuration: [setFeatureFlags()](lightweight-charts/src/feature-flags.ts:19) and [resetFeatureFlags()](lightweight-charts/src/feature-flags.ts:37) do nothing.
+- Bundle exports: Drawing tools are always injected by Rollup, independent of environment variables. See [rollup.config.js](lightweight-charts/rollup.config.js:56).
 
-建议的验证路径
-- 保持默认 verify 流程不变，观察 size-limit 是否稳定。
-- 手动运行 size-limit:flags-off 与 size-limit:flags-on 以确认脚本可用（当前两者等价，后续会在 flags-on 增加二级入口校验）。
+Migration guide
 
-后续工作
-- 接入公共按需入口（轻量曝光）：创建独立入口文件并仅在 flags-on 校验时引用。
-- 在 [.size-limit.js](lightweight-charts/.size-limit.js) 的 flags-on 模式下，新增“二级入口”体积阈值项，建立 OFF/ON 双基线报告。
-- 在 CI 中分别运行两个 size-limit 模式，形成对比与回归（Phase 0C - size-limit 双基线）。
-- 等待上游对公共导出的需求明确后，再切换到“二级入口”暴露策略，继续保持默认入口零引用。
-
-注意
-- 请勿从公共入口直接或间接导入任何 src/drawing/tools/*，否则会破坏“未开不打包”的保证。
-- 仅允许生成器写入 __generated__ 子目录；稳定入口文件必须手写维护并带注释 “@generated-entry”。
-
-## 启用方式（必须使用 dot-key）
-
-- Beta 工具必须通过 dot-key 启用：`drawingTools.<tool>`，同时主开关 `drawingTools` 需要开启。
-- 以矩形为例，必须如下启用（仅设置 canonical 键 `rectangle` 不会生效）：
-
+1) Remove flag toggling from applications and demos.
+- Before (old docs suggested):
 ```js
 import { setFeatureFlags } from 'lightweight-charts/feature-flags';
 setFeatureFlags({
-    drawingTools: true,
-    'drawingTools.rectangle': true,
+  drawingTools: true,
+  'drawingTools.rectangle': true,
 });
 ```
+- After:
+```js
+// No flags needed. Use the drawing tools directly.
+```
 
-- 运行时守卫以 dot-key 为准，参考构造阶段的双重校验入口（见 [function ensureFeatureFlagEnabled](../../src/feature-flags.ts) 与 [class RectangleDrawingPrimitive](../../src/drawing/tools/rectangle.impl.ts)）。
+2) Remove runtime guards.
+- Before:
+```js
+import { ensureFeatureFlagEnabled } from 'lightweight-charts/feature-flags';
+ensureFeatureFlagEnabled('drawingTools.rectangle', 'my-setup'); // may throw previously
+```
+- After:
+```js
+// Guard is not necessary; API is always available.
+```
 
-## 矩形 autoscale 行为说明（重要）
+3) Keep compatibility imports if needed (they’re harmless).
+- If you can’t remove [setFeatureFlags()](lightweight-charts/src/feature-flags.ts:19) calls right away, leaving them in place won’t change behavior.
 
-- 当前矩形（Rectangle）工具的 autoscale 策略仅影响“垂直范围”，不会改变时间轴的水平范围（不平移/缩放 timeScale）。
-- 若需要查看完整时间跨度，请继续使用 `chart.timeScale().fitContent()` 等 API；矩形不会主动修改 timeScale 的逻辑范围。
-- 这样可避免绘图工具影响到价格序列的可视窗口，符合轻量化与可预测的渲染策略。
+4) Tests
+- Unit: [feature-flags.spec.ts](lightweight-charts/tests/unittests/drawing/feature-flags.spec.ts:11) now asserts construction succeeds with no flags (always enabled).
+- Bundle: [bundle-flags-off.spec.ts](lightweight-charts/tests/unittests/drawing/bundle-flags-off.spec.ts:6) asserts the production ESM bundle exports RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec.
+- E2E: keep or add minimal smoke tests that construct and attach rectangles without flags:
+  - [rectangle-businessday-e2e.js](lightweight-charts/tests/e2e/interactions/test-cases/drawing/rectangle-businessday-e2e.js:1)
+  - rectangle-autoscale-vertical-only-e2e.js (add if missing)
+  - rectangle-attach-detach-e2e.js (add if missing)
+  - rectangle-flags-off.js should be updated to simply verify construction/attach works without relying on any flag.
 
-## 快速 E2E 验证（Windows）
+Developer quick start
 
-- 构建 Standalone：
-  - `npm run build:prod`
-- 最小交互流用例（Add→Complete→Edit→Undo/Redo→Autoscale→Delete）：
-  - `npm run e2e:rectangle`
-- Flag 关闭时的运行时守卫：
-  - `npm run e2e:rectangle-flags-off`
+- Build Standalone:
+  - npm run build:prod
+- Minimal interaction flow (Add → Complete → Edit → Undo/Redo → Autoscale → Delete):
+  - npm run e2e:rectangle
+- Full verification (Windows-friendly instructions may be required for local PowerShell policies; CI is the source of truth):
+  - npm run verify
 
-> 若需全量回归，请运行 `npm run verify`（包含 spec 校验、生成一致性检查、size-limit 双基线、E2E/内存与类型检查）。
+Important behavior: Rectangle autoscale is vertical-only
+
+- Rectangle autoscale only affects the vertical price range. It does not change or shift the horizontal time scale window.
+- To view the full time span, continue using chart.timeScale().fitContent() and other time-scale APIs.
+- This preserves predictable chart navigation for users and avoids drawing tools changing the viewed time range.
+
+FAQ
+
+- Do I still need to import or call feature flags? No. The helpers remain exported only for backward compatibility; they are no-ops.
+- Will removing my setFeatureFlags() calls break behavior? No. Tools are always on; removing calls is recommended to simplify code.
+- What about size-limit dual baselines? No longer necessary for flags-off/flags-on. Maintain a single baseline for the default bundle, since drawing exports are always present.
+
+Changelog
+
+- Wave0 Finalization: removed feature flag build/runtime gates, always-on drawing exports, compatibility shim retained in [src/feature-flags.ts](lightweight-charts/src/feature-flags.ts:1), and bundle injection in [rollup.config.js](lightweight-charts/rollup.config.js:56).
+- Docs updated to reflect always-on behavior and to emphasize autoscale vertical-only semantics.
+
+Appendix: Legacy content
+
+- Earlier versions of this document described dot-key enabling and flags-off/on build modes. Those instructions are deprecated and intentionally removed to avoid confusion.

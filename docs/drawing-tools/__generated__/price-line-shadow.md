@@ -2,7 +2,7 @@
 
 # price-line-shadow Drawing Tool
 
-- Feature Flag: `drawingTools.priceLineShadow`
+- Drawing tools are always enabled (no feature flags).
 - Spec Source: `packages/specs/price-line.(json|yaml)`
 
 ## Anchors

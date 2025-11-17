@@ -2,7 +2,7 @@
 
 # rectangle Drawing Tool
 
-- Feature Flag: `drawingTools.rectangle`
+- Drawing tools are always enabled (no feature flags).
 - Spec Source: `packages/specs/rectangle.(json|yaml)`
 
 ## Anchors

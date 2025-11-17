@@ -6,13 +6,15 @@
 
 ## 结论：Wave0 尚未达到“高质量验收”，但核心闭环已具备，可在 1-2 天收尾
 
+> 重要更新（2025-11）：已移除 Feature Flags 的构建/运行时门禁，绘图工具默认开启、始终导出。兼容性 API 保留为 no-op，详见 [feature-flags.ts](lightweight-charts/src/feature-flags.ts:1)。CI 与文档已切换为单一基线（不再区分 flags-off/on）。
+
 - 已具备：
   - 文档与路线图：`docs/waves.plan.md`、`docs/drawing-tools/*`（feature-flags、gap-analysis、wave0-design/phase/execution-plan/review）。
-  - 构建与导出：`rollup.config.js` 支持 `LWC_SIZE_LIMIT_MODE=flags-on` 注入绘图导出；`src/index.ts` 保持零引用；`src/standalone.ts` 暴露到 `window.LightweightCharts`。
+  - 构建与导出：绘图导出已默认注入（无需任何环境变量），见 [rollup.config.js](lightweight-charts/rollup.config.js:56)；`src/index.ts` 保持零引用；`src/standalone.ts` 暴露到 `window.LightweightCharts`。
   - 基座与管线：Primitive 接口、Pane/Axis 视图、命中测试（`pane-hit-test.ts`）、zOrder、Series/Pane attach/detach 包装器。
   - 插件对照：`plugin-examples` 提供矩形、趋势线、文本、背景着色等参考实现。
 - 未达标项：
-  - CI 串联与 flags-off/on 双基线缺位（size-limit/E2E/单测未形成强保护）。
+  - CI 串联未完整（size-limit 单一基线/E2E/单测未形成强保护）。
   - attach/detach/requestUpdate 的细粒度单测不足（滚动/缩放、BusinessDay 往返）；
   - 示例/官网教程收尾不足（特别是矩形 autoscale 仅影响垂直范围的说明）。
   - Demo 基线可视性不稳定（v0 页面在某些环境“空白”，详见下节排查与建议）。
@@ -33,9 +35,9 @@
 
 ## 主要差距与大问题（代码与流程）
 
-1) Feature Flags 契约稳定性
-- 风险：导出集合不稳定或存在循环引用，容易在 flags-off/on 构建或运行时失败。
-- 方案：锁定导出 `isEnabled/requireEnabled/setFeatureFlags/ensureFeatureFlagEnabled/resetFeatureFlags/allFlags` 与配套单测；在 CI 中同时运行 flags-off/on 构建与最小 E2E。
+1) Feature Flags（已移除）
+- 说明：Feature Flags 的构建/运行时门禁已删除，改为始终导出与始终可用；参见兼容性存根 [feature-flags.ts](lightweight-charts/src/feature-flags.ts:1)，其中 [isEnabled](lightweight-charts/src/feature-flags.ts:6)/[setFeatureFlags](lightweight-charts/src/feature-flags.ts:19)/[ensureFeatureFlagEnabled](lightweight-charts/src/feature-flags.ts:15) 等均为 no-op。
+- 验证：保留单测以确保契约与“始终可用”行为，例如 [feature-flags.spec.ts](lightweight-charts/tests/unittests/drawing/feature-flags.spec.ts:11) 与 [bundle-flags-off.spec.ts](lightweight-charts/tests/unittests/drawing/bundle-flags-off.spec.ts:6)。CI 不再运行 flags-off/on 双基线。
 
 2) 基座职责过重
 - 当前 `DrawingPrimitiveBase/包装器` 同时承担坐标缓存、订阅管理、指针工具，复杂度高。
@@ -58,7 +60,7 @@
 
 - Demo 基线稳定：禁用 overlay fallback，K线+成交量必须显示；初始化固定尺寸与日志打印；
 - CI 串联（Windows 兼容）：
-  - `npm ci` → `drawing-tools:generate --check` → `tsc-verify` → `build:prod` → `size-limit:flags-off|on` → `e2e:rectangle`（最小交互流）。
+  - `npm ci` → `drawing-tools:generate --check` → `tsc-verify` → `build:prod` → `size-limit` → `e2e:rectangle`（最小交互流）。
 - 单测补强：attach/detach/requestUpdate/ESC/undo/redo 边界；滚动/缩放拖拽稳定性；BusinessDay 往返一致性。
 - 文档与示例：官网教程页与 `docs/examples/drawing/rectangle` 更新，显式说明 autoscale 行为。
 
@@ -113,13 +115,13 @@
 - `rollup.config.js`：已支持 flags-on 注入导出；建议在 `package.json` 固定 `build:prod:flags-on` 与 size-limit 双基线并纳入 CI。
 - `src/index.ts` / `src/standalone.ts`：保持零引用策略（默认入口不导出绘图），避免包体积回归；
 - primitives/包装器/命中测试：结构清晰，建议为缓存与生命周期释放增加单测与日志；
-- `docs/drawing-tools/feature-flags.md`：已明确 dot-key 启用与 autoscale 行为，需在官网教程页同步；
+- `docs/drawing-tools/feature-flags.md`：已更新为“绘图默认开启，无需 Flag”，并保留 autoscale 垂直范围说明；需在官网教程页同步；
 - demo：建议最小化路径先只演示 K线与成交量，确认基础可视，随后再启用矩形与 overlay。
 
 ## 最终交付清单（Wave0 收尾）
 
 - Demo 可视性稳定（K线+成交量必须显示，禁用 overlay fallback 验证 attachPrimitive）。
-- CI：新增/串联脚本与 flags-off/on 双基线；矩形最小 E2E 入 CI。
+- CI：串联脚本（单一 size-limit 基线）；矩形最小 E2E 入 CI。
 - 单测：attach/detach/requestUpdate、滚动/缩放与 BusinessDay 边界；
 - 文档与示例：autoscale 行为说明、官网教程与 examples 完整。
 

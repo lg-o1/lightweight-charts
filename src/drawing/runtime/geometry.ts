@@ -31,6 +31,9 @@ export function rectBoundsPx<TH extends Time>(
 	end: AnchorLike<TH> | null
 ): RectBounds | null {
 	if (!start || !end) { return null; }
+	// Guard against incomplete anchors (time/price undefined) to avoid env transforms reading fields of undefined
+	if ((start as any).time == null || (end as any).time == null) { return null; }
+	if ((start as any).price == null || (end as any).price == null) { return null; }
 
 	const x1 = env.coordinateTransform.timeToCoordinate(start.time);
 	const x2 = env.coordinateTransform.timeToCoordinate(end.time);

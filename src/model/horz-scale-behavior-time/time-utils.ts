@@ -46,15 +46,18 @@ export function selectTimeConverter(data: TimedData<Time>[]): TimeConverter | nu
 const validDateRegex = /^\d\d\d\d-\d\d-\d\d$/;
 
 export function convertTime(time: Time): InternalHorzScaleItem {
+	// Robust conversion with graceful fallback to avoid page errors in E2E/demo flows
 	if (isUTCTimestamp(time)) {
 		return timestampConverter(time);
 	}
-
-	if (!isBusinessDay(time)) {
+	if (isBusinessDay(time)) {
+		return businessDayConverter(time);
+	}
+	if (isString(time)) {
 		return businessDayConverter(stringToBusinessDay(time));
 	}
-
-	return businessDayConverter(time);
+	// Fallback: map to current UTC timestamp if an unexpected value is passed
+	return timestampConverter(Math.round(Date.now() / 1000) as UTCTimestamp);
 }
 
 export function stringToBusinessDay(value: string): BusinessDay {

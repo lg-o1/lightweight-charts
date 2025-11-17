@@ -2,7 +2,7 @@
 
 # watermark-image-shadow Drawing Tool
 
-- Feature Flag: `drawingTools.watermarkImageShadow`
+- Drawing tools are always enabled (no feature flags).
 - Spec Source: `packages/specs/watermark-image.(json|yaml)`
 
 ## Anchors

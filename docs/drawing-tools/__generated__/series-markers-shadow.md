@@ -2,7 +2,7 @@
 
 # series-markers-shadow Drawing Tool
 
-- Feature Flag: `drawingTools.seriesMarkersShadow`
+- Drawing tools are always enabled (no feature flags).
 - Spec Source: `packages/specs/series-markers.(json|yaml)`
 
 ## Anchors

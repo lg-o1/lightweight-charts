@@ -10,18 +10,18 @@
     - 生成链（TDS→代码/文档/模板）与守护脚本雏形；
     - 基座抽象（DrawingPrimitiveBase、HandlesController、StateMachine、Views 分层）；
     - Rectangle 工具（add/preview/complete/edit/handles/hitTest/autoscale[仅垂直]/serialize/undo/redo/delete/ESC）；
-    - Feature Flags（drawingTools、drawingTools.rectangle）运行时守卫；
+    - Feature Flags（已移除；兼容性存根始终开启），见 [src/feature-flags.ts](lightweight-charts/src/feature-flags.ts:1)。
     - 文档体系（roadmap/phase/gap/flags/design/review）。
     - E2E 单例与 demo 手动验证：矩形绘制闭环在 v0 demo 正常工作。
   - 未完成：
-    - CI 守护闭环（drawing-tools:generate --check、flags-off/on 双基线、size-limit、最小 E2E 纳入 CI）。
+    - CI 守护闭环（drawing-tools:generate --check、size-limit 单一基线、最小 E2E 纳入 CI）。
     - 基座 attach/detach/requestUpdate 的细粒度单测与边界用例（滚动/缩放中的稳定性、BusinessDay 往返拖拽）。
     - 文档与官网示例收尾（特别是“矩形 autoscale 仅垂直范围”的明确说明）。
 
 ## 二、主要差距与大问题（代码与流程）
-1) Feature Flags 契约稳定性
-   - 风险：导出集合不稳定/循环引用可能导致编译/运行时失败；flags-off 构建/E2E 未入 CI。
-   - 建议：锁定导出集合 isEnabled/requireEnabled/setFeatureFlags/ensureFeatureFlagEnabled/resetFeatureFlags/allFlags，并配套单测与 flags-off/on 构造用例。
+1) Feature Flags（已移除）
+   - 说明：构建与运行时门禁已删除；绘图工具默认开启并始终导出；[src/feature-flags.ts](lightweight-charts/src/feature-flags.ts:1) 保留兼容性 API（no-op）。
+   - 建议：保留契约导出单测，统一使用单一 size-limit 基线与最小 E2E 冒烟用例，不再区分 flags-off/on。
 
 2) 基座职责过重
    - 现状：DrawingPrimitiveBase 同时承担 TTL 坐标缓存、Pointer 工具、订阅管理，复杂度高。
@@ -51,7 +51,7 @@
 
 ## 四、从简单到复杂的引入顺序与优先级（详细）
 - P0（Wave0 收尾，1-2 天）
-  1) CI 串联：drawing-tools:generate --check → tsc-verify → build:prod → flags-off/on size-limit 双基线 → e2e 单例（矩形）。
+  1) CI 串联：drawing-tools:generate --check → tsc-verify → build:prod → size-limit → e2e 单例（矩形）。
   2) 文档/示例：补“矩形 autoscale 仅垂直范围”说明与官网教程；examples/drawing/rectangle 完整示例。
   3) 单测补强：attach/detach/requestUpdate/ESC/undo/redo 边界；滚动/缩放中拖拽稳定性；BusinessDay 往返。
 
@@ -118,16 +118,15 @@
   - drawing-tools:generate --check
   - tsc-verify
   - build:prod
-  - build:prod:flags-off && size-limit:flags-off
-  - build:prod:flags-on && size-limit:flags-on
+  - size-limit
   - e2e:rectangle（仅 Puppeteer 内置浏览器）
 
 ## 九、文档与官网示例收尾
-- docs/drawing-tools/feature-flags.md：已明确“dot-key”启用与 autoscale 行为；继续补官网教程页与 examples。
+- docs/drawing-tools/feature-flags.md：已更新为“绘图默认开启，无需 Flag”，并强调 autoscale 仅垂直范围；继续补官网教程页与 examples。
 - website：新增“矩形工具”教程，演示 add/preview/edit/delete/undo/redo 与 autoscale 行为说明。
 
 ## 十、最终交付清单（Wave0 收尾）
-- CI：新增/串联脚本与 flags 双基线；矩形最小 E2E 入 CI。
+- CI：新增/串联脚本（单一 size-limit 基线）；矩形最小 E2E 入 CI。
 - 单测：attach/detach/requestUpdate、滚动/缩放与 BusinessDay 边界；
 - 文档与示例：autoscale 行为说明、官网教程与 examples 完整。
 

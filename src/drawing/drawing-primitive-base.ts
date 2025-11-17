@@ -28,7 +28,6 @@ import type {
 } from './types';
 import { HandleController } from './handles/handle-controller';
 import { DrawingStateMachine, type DrawingStateId, type DrawingStateTransitionHook } from './state/state-machine';
-import { requireEnabled } from '../feature-flags';
 
 type AttachedParam<THorz extends Time> = SeriesAttachedParameter<THorz, SeriesType>;
 
@@ -86,7 +85,6 @@ export abstract class DrawingPrimitiveBase<THorz extends Time = Time> implements
 	// ------------------------------------------------------------------------------------
 
 	public attached(param: AttachedParam<THorz>): void {
-		requireEnabled('drawingTools', 'DrawingPrimitiveBase.attached');
 		const { chart, series, requestUpdate } = param;
 
 		this._clearCoordinateCaches();
@@ -300,15 +298,32 @@ export abstract class DrawingPrimitiveBase<THorz extends Time = Time> implements
 	// Internal helpers
 	// ------------------------------------------------------------------------------------
 
+	private _enrichPointerEvent(ev: DrawingPointerEvent<THorz>): DrawingPointerEvent<THorz> {
+		try {
+			const env = this._environment;
+			if (!env || !ev.point) { return ev; }
+			if (ev.price == null) {
+				const p = env.coordinateTransform.coordinateToPrice(ev.point.y as Coordinate);
+				if (p != null) { (ev as any).price = p as number; }
+			}
+			if (ev.time == null) {
+				const t = env.coordinateTransform.coordinateToTime(ev.point.x as Coordinate);
+				if (t != null) { (ev as any).time = t as any; }
+			}
+		} catch {}
+		return ev;
+	}
+
 	private readonly _handleChartClick: MouseEventHandler<THorz> = (params: MouseEventParams<THorz>) => {
 		if (!this._environment) {
 			return;
 		}
 
-		const pointerEvent = pointerEventFromParams(params, 'click');
+		let pointerEvent = pointerEventFromParams(params, 'click');
 		if (!pointerEvent) {
 			return;
 		}
+		pointerEvent = this._enrichPointerEvent(pointerEvent);
 
 		this._stateMachine.pointerClick(pointerEvent);
 		this.handlePointerClick(pointerEvent);
@@ -319,12 +334,13 @@ export abstract class DrawingPrimitiveBase<THorz extends Time = Time> implements
 			return;
 		}
 
-		const pointerEvent = pointerEventFromParams(params, 'mousemove');
+		let pointerEvent = pointerEventFromParams(params, 'mousemove');
 		if (!pointerEvent) {
 			this._stateMachine.pointerCancel();
 			this.handlePointerCancel();
 			return;
 		}
+		pointerEvent = this._enrichPointerEvent(pointerEvent);
 
 		this._stateMachine.pointerMove(pointerEvent);
 		this.handlePointerMove(pointerEvent);

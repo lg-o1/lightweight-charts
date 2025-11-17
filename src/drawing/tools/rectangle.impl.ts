@@ -4,7 +4,6 @@
 import { DrawingPrimitiveBase } from '../drawing-primitive-base';
 import type { DrawingHoverResult, DrawingPointerEvent, DrawingViewBundle } from '../types';
 import { DrawingStateMachine, type DrawingStateId } from '../state/state-machine';
-import { ensureFeatureFlagEnabled } from '../../feature-flags';
 import type { IPrimitivePaneRenderer, IPrimitivePaneView, PrimitivePaneViewZOrder, DrawingUtils } from '../../model/ipane-primitive';
 import type { ISeriesPrimitiveAxisView } from '../../model/iseries-primitive';
 import type { AutoscaleInfo } from '../../model/series-options';
@@ -22,7 +21,7 @@ interface Anchor {
 	time: Time;
 	price: number;
 }
-interface RectOptions {
+export interface RectOptions {
 	fillColor: string;
 	previewFillColor: string;
 	labelColor: string;
@@ -52,15 +51,34 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	private _startPxCache: { x: number; y: number } | null = null;
 	private _endPxCache: { x: number; y: number } | null = null;
 
-	private _options: RectOptions = {
-		fillColor: rectangleSpec.options.find(o => o.name === 'fillColor')?.default as string ?? 'rgba(200, 50, 100, 0.75)',
-		previewFillColor: rectangleSpec.options.find(o => o.name === 'previewFillColor')?.default as string ?? 'rgba(200, 50, 100, 0.25)',
-		labelColor: rectangleSpec.options.find(o => o.name === 'labelColor')?.default as string ?? 'rgba(200, 50, 100, 1)',
-		labelTextColor: rectangleSpec.options.find(o => o.name === 'labelTextColor')?.default as string ?? '#ffffff',
-		showLabels: (rectangleSpec.options.find(o => o.name === 'showLabels')?.default as boolean) ?? true,
-		priceLabelFormatter: (p: number) => String(p),
-		timeLabelFormatter: (t: Time) => String(t),
-	};
+	private _options: RectOptions = (() => {
+		try {
+			const opts = (rectangleSpec && Array.isArray((rectangleSpec as any).options)) ? (rectangleSpec as any).options as Array<{ name: string; default: any }> : [];
+			const pick = <T>(name: string, fallback: T): T => {
+				const v = opts.find(o => o && o.name === name)?.default;
+				return (v as T) ?? fallback;
+			};
+			return {
+				fillColor: pick<string>('fillColor', 'rgba(200, 50, 100, 0.75)'),
+				previewFillColor: pick<string>('previewFillColor', 'rgba(200, 50, 100, 0.25)'),
+				labelColor: pick<string>('labelColor', 'rgba(200, 50, 100, 1)'),
+				labelTextColor: pick<string>('labelTextColor', '#ffffff'),
+				showLabels: pick<boolean>('showLabels', true),
+				priceLabelFormatter: (p: number) => String(p),
+				timeLabelFormatter: (t: Time) => String(t),
+			};
+		} catch {
+			return {
+				fillColor: 'rgba(200, 50, 100, 0.75)',
+				previewFillColor: 'rgba(200, 50, 100, 0.25)',
+				labelColor: 'rgba(200, 50, 100, 1)',
+				labelTextColor: '#ffffff',
+				showLabels: true,
+				priceLabelFormatter: (p: number) => String(p),
+				timeLabelFormatter: (t: Time) => String(t),
+			};
+		}
+	})();
 	private _undoStack: RectangleSnapshotV1[] = [];
 	private _redoStack: RectangleSnapshotV1[] = [];
 
@@ -79,8 +97,6 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 
 	public constructor() {
 		super(rectangleSpec.states?.[0] ?? 'idle');
-		ensureFeatureFlagEnabled('drawingTools', 'RectangleDrawingPrimitive');
-		ensureFeatureFlagEnabled('drawingTools.rectangle', 'RectangleDrawingPrimitive');
 		this._paneFillView = new RectanglePaneView(this);
 		this._handlesView = new RectangleHandlesPaneView(this);
 		this._priceAxisPaneView = new RectanglePriceAxisPaneView(this);
@@ -102,13 +118,37 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 	protected override handlePointerClick(event: DrawingPointerEvent): void {
 		const state = this.stateMachine().state();
 		// First anchor
-		if (this._start === null && event.price != null && event.time != null) {
-			this._beginAnchoring(event);
-			return;
+		if (this._start === null) {
+			// ensure we have anchors even if event lacks semantic price/time
+			if (event.price == null || event.time == null) {
+				const env = this.environment();
+				const pt = event.point;
+				if (pt && pt.x != null && pt.y != null) {
+					const t = env.coordinateTransform.coordinateToTime(pt.x as Coordinate) as Time | null;
+					const p = env.coordinateTransform.coordinateToPrice(pt.y as Coordinate) as number | null;
+					if (t != null) { (event as any).time = t; }
+					if (p != null) { (event as any).price = p; }
+				}
+			}
+			if (event.price != null && event.time != null) {
+				this._beginAnchoring(event);
+				return;
+			}
 		}
 
 		// While anchoring/preview, click should complete the rectangle even if _end already set by move
 		if (this._start !== null && (state === 'anchoring' || state === 'preview')) {
+			// fill missing semantics via transform if needed
+			if (event.price == null || event.time == null) {
+				const env = this.environment();
+				const pt = event.point;
+				if (pt && pt.x != null && pt.y != null) {
+					const t = env.coordinateTransform.coordinateToTime(pt.x as Coordinate) as Time | null;
+					const p = env.coordinateTransform.coordinateToPrice(pt.y as Coordinate) as number | null;
+					if (t != null) { (event as any).time = t; }
+					if (p != null) { (event as any).price = p; }
+				}
+			}
 			this._completeAnchoring(event);
 			return;
 		}
@@ -176,18 +216,26 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 
 		// Editing: handle or body drag
 		if (state === 'editing' && this._start !== null && this._end !== null) {
+			// Fill missing semantic time/price from pixel coordinates for crosshair-driven edits
+			if ((event.price == null || event.time == null) && event.point && event.point.x != null && event.point.y != null) {
+				const env = this.environment();
+				const t = env.coordinateTransform.coordinateToTime(event.point.x as Coordinate) as Time | null;
+				const p = env.coordinateTransform.coordinateToPrice(event.point.y as Coordinate) as number | null;
+				if (t != null) { (event as any).time = t; }
+				if (p != null) { (event as any).price = p; }
+			}
 			// Handle drag (prefer explicit selection from click; fallback to hit under cursor)
 			const handleId = this._dragTarget === 'handle'
 				? this._activeHandleId
 				: (event.point && event.point.x != null && event.point.y != null
 					? this.handlesController().hitTest(event.point.x, event.point.y)?.handle.id()
 					: undefined);
-
+		
 			if (handleId && event.price != null && event.time != null) {
 				this._applyHandleDelta(handleId, event);
 				return;
 			}
-
+		
 			// Body drag: move both anchors by delta using pixel-space transform to support all time types
 			if (this._dragTarget === 'body' && this._origStart && this._origEnd && this._dragStartPx && event.point && event.point.x != null && event.point.y != null) {
 				this._applyBodyDelta(event);
@@ -469,7 +517,7 @@ export class RectangleDrawingPrimitive extends DrawingPrimitiveBase {
 
 	// Public proxies for renderers
 	public getBoundsPxForView(): { left: number; right: number; top: number; bottom: number } | null { return this._boundsPx(); }
-	public getOptions(): Readonly<typeof this._options> { return this._options; }
+	public getOptions(): Readonly<RectOptions> { return this._options; }
 	public getState(): DrawingStateId { return this.stateMachine().state(); }
 	public drawHandlesToTarget(target: CanvasRenderingTarget2D): void {
 		target.useBitmapCoordinateSpace(scope => {
@@ -770,9 +818,9 @@ class RectAxisLabelViewTime implements ISeriesPrimitiveAxisView {
 	public constructor(p: RectangleDrawingPrimitive, anchor: 'start' | 'end') { this._primitive = p; this._anchor = anchor; }
 	public coordinate(): number {
 		if (!this._primitive.getOptions().showLabels) { return -1; }
-		const env = this._primitive.environment();
 		const a = this._anchor === 'start' ? this._primitive.getStartAnchor() : this._primitive.getEndAnchor();
-		if (!a) { return -1; }
+		if (!a || (a as any).time == null) { return -1; }
+		const env = this._primitive.environment();
 		const x = env.coordinateTransform.timeToCoordinate(a.time);
 		return (x ?? -1) as number;
 	}
@@ -802,6 +850,12 @@ class RectangleAxisPaneRenderer implements IPrimitivePaneRenderer {
 		const start = this._primitive.getStartAnchor();
 		const end = this._primitive.getEndAnchor();
 		if (!start || !end) { return; }
+		// Guard against missing anchor fields to avoid passing undefined into time/price converters
+		if (this._vertical) {
+			if ((start as any).price == null || (end as any).price == null) { return; }
+		} else {
+			if ((start as any).time == null || (end as any).time == null) { return; }
+		}
 		const env = this._primitive.environment();
 		const c1 = this._vertical
 			? env.coordinateTransform.priceToCoordinate(start.price)

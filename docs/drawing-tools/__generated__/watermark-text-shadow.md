@@ -2,7 +2,7 @@
 
 # watermark-text-shadow Drawing Tool
 
-- Feature Flag: `drawingTools.watermarkTextShadow`
+- Drawing tools are always enabled (no feature flags).
 - Spec Source: `packages/specs/watermark-text.(json|yaml)`
 
 ## Anchors

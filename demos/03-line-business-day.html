@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>03 — Basic Line (BusinessDay)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f6f7f9;color:#111}
+    header,footer{padding:12px 16px;background:#fff;border-bottom:1px solid #e5e7eb}
+    main{padding:12px 16px}
+    .row{display:flex;gap:16px;align-items:flex-start}
+    .left{flex:0 0 980px}
+    .right{flex:1 1 auto}
+    #chart{width:960px;height:480px;border:1px solid #e5e7eb;background:#fff}
+    .toolbar{display:flex;gap:8px;margin:8px 0}
+    button{padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer}
+    button:hover{background:#f3f4f6}
+    pre{white-space:pre-wrap;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;height:460px;overflow:auto}
+    a.nav{color:#0a58ca;text-decoration:none}
+    a.nav:hover{text-decoration:underline}
+    .hint{font-size:12px;color:#555}
+    .kv{display:grid;grid-template-columns:140px 1fr;gap:6px 10px;margin-top:8px}
+    .kv div{font-size:12px}
+    .kv .k{color:#555}
+    .kv .v{color:#222}
+  </style>
+</head>
+<body>
+  <header>
+    <a class="nav" href="./index.html">← Back to Demos Index</a>
+    <h1>03 — Basic Line (BusinessDay)</h1>
+    <p class="hint">Validate BusinessDay time mapping, crosshair, visible range, and autoscale on price only.</p>
+  </header>
+  <main>
+    <div class="row">
+      <div class="left">
+        <div id="chart"></div>
+        <div class="toolbar" id="toolbar"></div>
+        <div class="kv" id="kv">
+          <div class="k">Hovered Time:</div><div class="v" id="kv-time">-</div>
+          <div class="k">Hovered Price:</div><div class="v" id="kv-price">-</div>
+          <div class="k">Point (px):</div><div class="v" id="kv-point">-</div>
+        </div>
+      </div>
+      <div class="right">
+        <h3>Console Log</h3>
+        <pre id="log"></pre>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <span class="hint">BusinessDay uses objects { year, month, day } and may be non-linear in pixel mapping across weekends. This demo prints ranges and selections for verification.</span>
+  </footer>
+
+  <script type="module" src="./03-line-business-day.js"></script>
+</body>
+</html>

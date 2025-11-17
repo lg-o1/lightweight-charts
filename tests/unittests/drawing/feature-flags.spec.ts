@@ -5,24 +5,21 @@
 import { describe, it, beforeEach } from 'node:test';
 import { expect } from 'chai';
 
-import { setFeatureFlags, resetFeatureFlags } from '../../../src/feature-flags';
+import { isEnabled, resetFeatureFlags } from '../../../src/feature-flags';
 import { RectangleDrawingPrimitive } from '../../../src/drawing/tools/rectangle';
 
-describe('drawing tools feature flags (generated)', () => {
+describe('drawing tools without feature flags (always enabled)', () => {
 	beforeEach(() => {
 		resetFeatureFlags();
 	});
 
-	it('throws when flags disabled (rectangle)', () => {
-		expect(() => new RectangleDrawingPrimitive()).to.throw(/Feature flag/i);
+	it('Rectangle constructs without any flags', () => {
+		expect(() => new RectangleDrawingPrimitive()).to.not.throw();
 	});
 
-	it('constructs when required flags are enabled (rectangle)', () => {
-		setFeatureFlags({
-			drawingTools: true,
-			'drawingTools.rectangle': true,
-		});
-		expect(() => new RectangleDrawingPrimitive()).to.not.throw();
+	it('isEnabled returns true for any feature', () => {
+		expect(isEnabled('drawingTools')).to.equal(true);
+		expect(isEnabled('drawingTools.rectangle' as any)).to.equal(true);
 	});
 
 });

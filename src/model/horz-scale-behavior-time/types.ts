@@ -1,5 +1,4 @@
 import { Nominal } from '../../helpers/nominal';
-import { isNumber, isString } from '../../helpers/strict-type-checks';
 
 /**
  * Represents a time as a UNIX timestamp.
@@ -63,11 +62,18 @@ export interface TimePoint {
 /**
  * Check if a time value is a business day object.
  *
+ * Robust guard to avoid accessing `time.year` on non-objects.
+ *
  * @param time - The time to check.
  * @returns `true` if `time` is a {@link BusinessDay} object, false otherwise.
  */
 export function isBusinessDay(time: Time): time is BusinessDay {
-	return !isNumber(time) && !isString(time);
+	return typeof time === 'object'
+		&& time !== null
+		&& !Array.isArray(time)
+		&& typeof (time as any).year === 'number'
+		&& typeof (time as any).month === 'number'
+		&& typeof (time as any).day === 'number';
 }
 
 /**
@@ -77,7 +83,7 @@ export function isBusinessDay(time: Time): time is BusinessDay {
  * @returns `true` if `time` is a {@link UTCTimestamp} number, false otherwise.
  */
 export function isUTCTimestamp(time: Time): time is UTCTimestamp {
-	return isNumber(time);
+	return typeof time === 'number';
 }
 
 /**

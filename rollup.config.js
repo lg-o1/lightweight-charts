@@ -20,7 +20,8 @@ function getCurrentVersion() {
 
 const currentVersion = getCurrentVersion();
 
-const flagsMode = String(process.env.LWC_SIZE_LIMIT_MODE || '').toLowerCase();
+const flagsModeRaw = String(process.env.LWC_SIZE_LIMIT_MODE || '');
+const flagsMode = flagsModeRaw.trim().toLowerCase();
 const isFlagsOn = flagsMode === 'flags-on';
 
 const year = new Date().getFullYear();
@@ -46,17 +47,15 @@ function getConfig(inputFile, { format, isProd, isStandalone }) {
 		},
 		plugins: [
 			nodeResolve(),
-			replace({
-				preventAssignment: true,
-				values: {
-					// make sure that this values are synced with src/typings/globals/index.d.ts
-					'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
-					'process.env.BUILD_VERSION': JSON.stringify(currentVersion),
-					'/*__DRAWING_EXPORTS__*/': isFlagsOn
-						? 'export { RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec } from "./drawing/tools/rectangle.js"; export { setFeatureFlags, resetFeatureFlags, ensureFeatureFlagEnabled, requireEnabled, isEnabled, allFlags } from "./feature-flags.js";'
-						: '',
-				},
-			}),
+				replace({
+					preventAssignment: true,
+					values: {
+						// make sure that this values are synced with src/typings/globals/index.d.ts
+						'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
+						'process.env.BUILD_VERSION': JSON.stringify(currentVersion),
+						'/*__DRAWING_EXPORTS__*/': 'export { RectangleDrawingPrimitive, RectangleDrawingTool, rectangleSpec } from "./drawing/tools/rectangle.js";',
+						},
+					}),
 			isProd && terser({
 				output: {
 					comments: /@license/,
@@ -100,7 +99,7 @@ modes.forEach(mode => {
 
 // eslint-disable-next-line no-console
 console.log(`Building version: ${currentVersion}`);
-console.log(`[Build] LWC_SIZE_LIMIT_MODE=${flagsMode || '(unset)'} => drawing exports ${isFlagsOn ? 'ENABLED' : 'DISABLED'}`);
+// drawing exports are always enabled; feature flags removed
 
 // eslint-disable-next-line import/no-default-export
 export default configs;
